@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+vendor/
+frontend/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker volumes (data persisted in named volumes)
+postgres_data/
+
+# Build/Cache
+frontend/build/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+bootstrap/cache/
+
+# Logs
+*.log
+storage/logs/
+
+# Filament storage
+filament/demo-main/storage/logs/
+filament/demo-main/storage/framework/cache/
+filament/demo-main/storage/framework/sessions/
+filament/demo-main/storage/framework/views/
+filament/demo-main/vendor/
+
+# TasarımAsamasındakiProjeler — eski taslaklar, repo'ya dahil edilmez
+TasarımAsamasındakiProjeler/
+
+# Local History extension
+.history/
+
+# GitHub chatmodes (VS Code local)
+.github/
