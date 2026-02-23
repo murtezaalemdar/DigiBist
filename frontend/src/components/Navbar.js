@@ -69,7 +69,7 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
 
   return (
     <nav className="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+      <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 h-14 sm:h-16 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-1.5 sm:p-2 rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20">

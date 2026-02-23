@@ -40,6 +40,7 @@ from app.trading.models import ManualOrderRequest, AutoTradeConfig, ConditionalO
 from app.trading.strategy_engine import StrategyEngine, IndicatorSet
 from app.trading.execution_engine import ExecutionEngine
 from app.trading.auto_trader import AutoTrader
+from app.trading.brokers.broker_manager import BrokerManager
 from app.core.database import (
     get_stocks_for_trading,
     save_conditional_order,
@@ -101,6 +102,10 @@ async def get_watched_symbols() -> list[str]:
 
 execution_engine = ExecutionEngine()
 auto_trader = AutoTrader()
+broker_manager = BrokerManager()
+
+# Broker manager'ı execution engine'e bağla
+execution_engine._broker_manager = broker_manager
 
 # WS batch: bellekte tutacağımız son fiyatlar (DB'ye gitmeden WS'e hızlı cevap)
 _ws_price_cache: dict[str, dict] = {}
@@ -895,4 +900,93 @@ async def home():
         "ws_connections": len(manager.active_connections),
         "auto_trade_enabled": auto_trader.enabled,
         "order_history_size": order_count,
+        "broker": broker_manager.active_broker_type,
+        "exchange": broker_manager.active_exchange,
     }
+
+
+# ─────────────────────────────────────────────
+# 7) BROKER YÖNETİMİ API
+# ─────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup_initialize_broker():
+    """Uygulama başlangıcında varsayılan broker'ı aktifle."""
+    await broker_manager.initialize_default()
+    logger.info("Broker Manager başlatıldı (Paper Trading varsayılan).")
+
+
+@app.get("/api/broker/status")
+async def broker_status():
+    """Aktif broker durumunu getir."""
+    return await broker_manager.get_status()
+
+
+@app.get("/api/broker/list")
+async def broker_list():
+    """Desteklenen tüm broker'ların bilgilerini getir."""
+    return {
+        "brokers": broker_manager.get_broker_info(),
+        "active_broker": broker_manager.active_broker_type,
+        "active_exchange": broker_manager.active_exchange,
+    }
+
+
+@app.get("/api/broker/config/{broker_type}")
+async def broker_config_fields(broker_type: str):
+    """Belirli bir broker'ın konfigürasyon alanlarını getir."""
+    fields = broker_manager.get_broker_config_fields(broker_type)
+    if not fields and broker_type not in ("paper", "ibkr", "matriks", "is_yatirim"):
+        return {"error": f"Desteklenmeyen broker: {broker_type}"}
+    # Mevcut config'i de gönder (şifreleri maskele)
+    current = broker_manager.get_broker_config(broker_type)
+    masked = {}
+    for k, v in current.items():
+        if "secret" in k.lower() or "password" in k.lower():
+            masked[k] = "••••••••" if v else ""
+        else:
+            masked[k] = v
+    return {"broker_type": broker_type, "fields": fields, "current_config": masked}
+
+
+@app.post("/api/broker/config/{broker_type}")
+async def save_broker_config(broker_type: str, config: dict):
+    """Broker konfigürasyonunu kaydet (API key'ler vb.)."""
+    # Maskeli değerleri eski config'den koru
+    old_config = broker_manager.get_broker_config(broker_type)
+    merged = {}
+    for k, v in config.items():
+        if v == "••••••••" and k in old_config:
+            merged[k] = old_config[k]
+        else:
+            merged[k] = v
+    broker_manager.set_broker_config(broker_type, merged)
+    return {"status": "ok", "broker_type": broker_type, "message": "Konfigürasyon kaydedildi."}
+
+
+@app.post("/api/broker/connect")
+async def broker_connect(payload: dict):
+    """
+    Broker'a bağlan.
+    Body: { "broker_type": "ibkr", "exchange": "BIST" }
+    """
+    broker_type = payload.get("broker_type", "paper")
+    exchange = payload.get("exchange", "BIST")
+    from dataclasses import asdict
+    status = await broker_manager.switch_broker(broker_type, exchange)
+    return asdict(status)
+
+
+@app.post("/api/broker/disconnect")
+async def broker_disconnect():
+    """Mevcut broker bağlantısını kes."""
+    await broker_manager.disconnect_current()
+    return {"status": "ok", "message": "Broker bağlantısı kesildi."}
+
+
+@app.post("/api/broker/exchange")
+async def set_exchange(payload: dict):
+    """Aktif borsayı değiştir. Body: { "exchange": "NYSE" }"""
+    exchange = payload.get("exchange", "BIST")
+    broker_manager.set_exchange(exchange)
+    return {"status": "ok", "active_exchange": exchange}

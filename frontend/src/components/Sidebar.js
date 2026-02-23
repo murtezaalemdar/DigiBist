@@ -19,7 +19,7 @@ const Sidebar = ({
 
   return (
     <div className="lg:col-span-3 order-2 lg:order-1">
-      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 backdrop-blur-lg">
+      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-4 xl:p-6 backdrop-blur-lg lg:sticky lg:top-20">
         {/* Başlık + Filtre */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -69,7 +69,7 @@ const Sidebar = ({
         </div>
 
         {/* Hisse listesi */}
-        <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1 scrollbar-hide">
+        <div className="space-y-2 max-h-[60vh] xl:max-h-[70vh] overflow-y-auto pr-1 scrollbar-hide">
           {displayStocks.length === 0 && (
             <div className="text-center py-8 text-slate-600">
               <Star size={24} className="mx-auto mb-2 opacity-30" />

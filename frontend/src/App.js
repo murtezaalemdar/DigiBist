@@ -60,7 +60,12 @@ const AppContent = () => {
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem('bist_favorites') || '[]'); } catch { return []; }
   });
-  const [manualOrder, setManualOrder] = useState({ symbol: '', side: 'BUY', quantity: 10, mode: 'paper' });
+  const [manualOrder, setManualOrder] = useState({
+    symbol: '', side: 'BUY', quantity: 10, mode: 'paper',
+    order_type: 'market', strategy_type: 'manual',
+    trigger_price: null, stop_price: null, take_profit_price: null,
+    trailing_stop_pct: null, portfolio_value: 250000, notes: '',
+  });
   const [tradeLoading, setTradeLoading] = useState(false);
   const [tradeResult, setTradeResult] = useState(null);
   const [autoTradeStatus, setAutoTradeStatus] = useState({ enabled: false, config: {}, recent_logs: [] });
@@ -71,10 +76,27 @@ const AppContent = () => {
     max_order_size: 20000,
     cycle_seconds: 60,
     portfolio_value: 250000,
+    strategy_type: 'ai_only',
+    rsi_oversold: 30,
+    rsi_overbought: 70,
+    use_macd: true,
+    use_bollinger: true,
+    use_volume: true,
+    auto_stop_loss_pct: 3.0,
+    auto_take_profit_pct: 5.0,
   });
   const [orderHistory, setOrderHistory] = useState([]);
   const [tickerSpeed, setTickerSpeed] = useState(() => {
     try { return Number(localStorage.getItem('bist_ticker_speed')) || 120; } catch { return 120; }
+  });
+
+  // Broker state
+  const [brokerStatus, setBrokerStatus] = useState({
+    connected: false,
+    broker_type: 'paper',
+    broker_name: 'Paper Trading',
+    exchange: 'BIST',
+    active_exchange: 'BIST',
   });
 
   // WebSocket hook
@@ -130,6 +152,11 @@ const AppContent = () => {
       .then(res => res.json())
       .then(d => setOrderHistory(d.orders || []))
       .catch(() => { });
+
+    fetch(`${API_BASE}/api/broker/status`)
+      .then(res => res.json())
+      .then(d => setBrokerStatus(d))
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -149,7 +176,14 @@ const AppContent = () => {
         side: manualOrder.side,
         quantity: Number(manualOrder.quantity),
         mode: manualOrder.mode,
-        portfolio_value: Number(autoTradeConfig.portfolio_value || 250000),
+        portfolio_value: Number(manualOrder.portfolio_value || 250000),
+        order_type: manualOrder.order_type || 'market',
+        strategy_type: manualOrder.strategy_type || 'manual',
+        trigger_price: manualOrder.trigger_price || null,
+        stop_price: manualOrder.stop_price || null,
+        take_profit_price: manualOrder.take_profit_price || null,
+        trailing_stop_pct: manualOrder.trailing_stop_pct || null,
+        notes: manualOrder.notes || '',
       }),
     })
       .then(res => res.json())
@@ -169,6 +203,14 @@ const AppContent = () => {
       max_order_size: Number(autoTradeConfig.max_order_size),
       cycle_seconds: Number(autoTradeConfig.cycle_seconds),
       portfolio_value: Number(autoTradeConfig.portfolio_value),
+      strategy_type: autoTradeConfig.strategy_type || 'ai_only',
+      rsi_oversold: Number(autoTradeConfig.rsi_oversold ?? 30),
+      rsi_overbought: Number(autoTradeConfig.rsi_overbought ?? 70),
+      use_macd: autoTradeConfig.use_macd ?? true,
+      use_bollinger: autoTradeConfig.use_bollinger ?? true,
+      use_volume: autoTradeConfig.use_volume ?? true,
+      auto_stop_loss_pct: Number(autoTradeConfig.auto_stop_loss_pct ?? 3.0),
+      auto_take_profit_pct: Number(autoTradeConfig.auto_take_profit_pct ?? 5.0),
     };
 
     const endpoint = action === 'start'
@@ -224,8 +266,8 @@ const AppContent = () => {
           }}
         />
 
-        <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-8">
+        <main className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
 
             {/* Sidebar — sadece dashboard'da */}
             {activePage === 'dashboard' && (
@@ -270,6 +312,8 @@ const AppContent = () => {
                   favorites={favorites}
                   tickerSpeed={tickerSpeed}
                   setTickerSpeed={setTickerSpeed}
+                  brokerStatus={brokerStatus}
+                  setBrokerStatus={setBrokerStatus}
                 />
               )}
 
@@ -287,6 +331,9 @@ const AppContent = () => {
                   tradeLoading={tradeLoading}
                   tradeResult={tradeResult}
                   loadTradingState={loadTradingState}
+                  stocks={stocks}
+                  livePrices={livePrices}
+                  brokerStatus={brokerStatus}
                 />
               )}
 
@@ -314,7 +361,7 @@ const AppContent = () => {
         </main>
 
         <footer className="border-t border-white/5 mt-10 sm:mt-20 py-6 sm:py-10">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
+          <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
             <div className="flex items-center gap-2 text-slate-500 grayscale opacity-50">
               <BrainCircuit size={20} />
               <span className="text-sm font-medium">Powered by NextGen ML Engine & Yahoo Finance API</span>

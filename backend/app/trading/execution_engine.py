@@ -2,14 +2,18 @@
 Paper/Real emir yönlendirme motoru V2 — PostgreSQL destekli.
 Her emir otomatik olarak 'orders' tablosuna kaydedilir.
 Spread/slippage hesaplama, gelişmiş emir türleri.
+Broker adapter entegrasyonu: gerçek broker bağlıysa emir broker üzerinden yönlendirilir.
 """
 
 import time
 import uuid
 import random
+import logging
 from dataclasses import asdict, dataclass
 
 from app.core.database import save_order_v2, get_recent_orders_v2, get_trade_stats
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,7 +49,11 @@ class ExecutionEngine:
     Paper/Real emir yönlendirme iskeleti V2.
     Spread/slippage simülasyonu, gelişmiş emir türleri desteği.
     Tüm emirler PostgreSQL'e kalıcı olarak kaydedilir.
+    Gerçek broker bağlıysa emirler broker API üzerinden iletilir.
     """
+
+    def __init__(self, broker_manager=None):
+        self._broker_manager = broker_manager
 
     @staticmethod
     def calculate_spread(market_price: float) -> float:
@@ -144,7 +152,27 @@ class ExecutionEngine:
         payload = asdict(order)
 
         if mode == "real" and approved:
-            payload["note"] = "REAL mode currently runs as broker dry-run adapter."
+            # Gerçek broker bağlıysa emri broker üzerinden yönlendir
+            broker_result = await self._route_through_broker(
+                symbol=symbol, side=side, quantity=quantity,
+                order_type=order_type, fill_price=fill_price,
+                trigger_price=trigger_price, stop_price=stop_price,
+            )
+            if broker_result:
+                payload["broker_execution"] = broker_result
+                if broker_result.get("success"):
+                    payload["broker_order_id"] = broker_result.get("broker_order_id")
+                    payload["broker_fill_price"] = broker_result.get("fill_price")
+                    payload["broker_commission"] = broker_result.get("commission")
+                    payload["broker_type"] = broker_result.get("broker_type")
+                    payload["exchange"] = broker_result.get("exchange")
+                    # Gerçek dolum fiyatını güncelle
+                    if broker_result.get("fill_price"):
+                        payload["simulated_fill_price"] = broker_result["fill_price"]
+                else:
+                    payload["note"] = f"Broker emir hatası: {broker_result.get('status', 'bilinmiyor')}"
+            else:
+                payload["note"] = "REAL mode — broker bağlı değil, simülasyon olarak çalıştı."
 
         # PostgreSQL'e kalıcı kaydet (V2)
         try:
@@ -153,6 +181,56 @@ class ExecutionEngine:
             payload["db_warning"] = f"DB kayıt hatası: {e}"
 
         return payload
+
+    async def _route_through_broker(
+        self, symbol: str, side: str, quantity: float,
+        order_type: str, fill_price: float,
+        trigger_price: float | None = None,
+        stop_price: float | None = None,
+    ) -> dict | None:
+        """
+        Eğer broker_manager varsa ve gerçek broker bağlıysa,
+        emri aktif broker üzerinden çalıştır.
+        """
+        if not self._broker_manager:
+            return None
+
+        try:
+            status = await self._broker_manager.get_status()
+            if not status.get("connected"):
+                return None
+
+            # Paper broker'da gerçek bağlantı yok, direkt None dön
+            broker_type = status.get("broker_type", "paper")
+            if broker_type == "paper":
+                return None
+
+            broker = self._broker_manager.active_broker
+            if not broker:
+                return None
+
+            result = await broker.place_order(
+                symbol=symbol,
+                side=side,
+                quantity=quantity,
+                order_type=order_type,
+                price=fill_price if order_type == "limit" else None,
+            )
+
+            return {
+                "success": result.success,
+                "broker_order_id": result.broker_order_id,
+                "fill_price": result.fill_price,
+                "commission": result.commission,
+                "spread": result.spread,
+                "slippage": result.slippage,
+                "status": result.status,
+                "exchange": result.exchange,
+                "broker_type": result.broker_type,
+            }
+        except Exception as e:
+            logger.error(f"Broker emir yönlendirme hatası: {e}")
+            return {"success": False, "status": f"error: {e}"}
 
     async def recent_orders(self, limit: int = 100, **filters) -> list[dict]:
         """PostgreSQL'den filtrelenmiş emirleri getir."""
