@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Activity, Zap, BrainCircuit, Star, Filter } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Activity, Zap, BrainCircuit, Star, Filter, Search, X } from 'lucide-react';
 
 /** Sol kenar takip listesi + premium kartı */
 const Sidebar = ({
@@ -12,10 +12,22 @@ const Sidebar = ({
   toggleFavorite,
 }) => {
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [filterText, setFilterText] = useState('');
 
-  const displayStocks = showOnlyFavorites
-    ? stocks.filter((s) => favorites.includes(s.symbol))
-    : stocks;
+  const displayStocks = useMemo(() => {
+    let list = showOnlyFavorites
+      ? stocks.filter((s) => favorites.includes(s.symbol))
+      : stocks;
+    if (filterText.trim()) {
+      const q = filterText.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.symbol.toLowerCase().includes(q) ||
+          (s.name && s.name.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [stocks, showOnlyFavorites, favorites, filterText]);
 
   return (
     <div className="lg:col-span-3 order-2 lg:order-1">
@@ -43,11 +55,11 @@ const Sidebar = ({
           </div>
         </div>
 
-        {/* Filtre sekmeleri */}
-        <div className="flex gap-1 mb-3">
+        {/* Filtre sekmeleri + Arama */}
+        <div className="flex items-center gap-1 mb-3">
           <button
             onClick={() => setShowOnlyFavorites(false)}
-            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
+            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all shrink-0 ${
               !showOnlyFavorites
                 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                 : 'text-slate-500 hover:text-slate-300'
@@ -57,7 +69,7 @@ const Sidebar = ({
           </button>
           <button
             onClick={() => setShowOnlyFavorites(true)}
-            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shrink-0 ${
               showOnlyFavorites
                 ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
                 : 'text-slate-500 hover:text-slate-300'
@@ -66,6 +78,26 @@ const Sidebar = ({
             <Star size={9} fill={showOnlyFavorites ? 'currentColor' : 'none'} />
             Favoriler ({favorites.length})
           </button>
+
+          {/* Hisse arama kutusu */}
+          <div className="relative flex-1 ml-1">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Hisse ara..."
+              className="w-full bg-white/5 border border-white/10 rounded-lg text-[11px] text-slate-200 placeholder-slate-600 pl-6 pr-6 py-1 focus:outline-none focus:border-blue-500/50 focus:bg-white/[0.07] transition-all"
+            />
+            {filterText && (
+              <button
+                onClick={() => setFilterText('')}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Hisse listesi */}

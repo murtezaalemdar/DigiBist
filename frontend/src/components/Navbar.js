@@ -16,11 +16,14 @@ import {
   User,
   Users,
   Menu,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
-const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConnected, priceProvider }) => {
+const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConnected, priceProvider, livePrices = {} }) => {
   const { user, logout, login, hasPermission } = useAuth();
+  const xu100 = livePrices['XU100'] || null;
   const [showLogin, setShowLogin] = useState(false);
   const [loginUsername, setLoginUsername] = useState('admin');
   const [loginPassword, setLoginPassword] = useState('password');
@@ -69,7 +72,7 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
   };
 
   return (
-    <nav className="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-50">
+    <nav className="border-b border-white/5 bg-black/20 backdrop-blur-md">
       <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 h-14 sm:h-16 flex items-center justify-between">
         {/* Logo — tıklayınca Dashboard'a git */}
         <button
@@ -102,6 +105,24 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
             </button>
           ))}
         </div>
+
+        {/* BIST 100 Endeks Değeri — desktop */}
+        {xu100 && xu100.price > 0 && (
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">BIST 100</span>
+            <span className="text-sm font-mono font-bold text-white">
+              {xu100.price.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            {xu100.change !== 0 && (
+              <span className={`flex items-center gap-0.5 text-xs font-black ${
+                xu100.change > 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {xu100.change > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                {xu100.change > 0 ? '+' : ''}{xu100.change.toFixed(2)}%
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Right side */}
         <div className="flex items-center gap-2 sm:gap-4">
@@ -266,8 +287,24 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
             ))}
           </div>
 
-          {/* Mobile WS Status */}
-          <div className="px-4 pb-3 md:hidden">
+          {/* Mobile WS Status + BIST100 */}
+          <div className="px-4 pb-3 md:hidden space-y-2">
+            {xu100 && xu100.price > 0 && (
+              <div className="flex items-center justify-center gap-2 text-xs font-bold py-2 rounded-xl border border-white/10 bg-white/5">
+                <span className="text-slate-400 uppercase tracking-wider text-[10px]">BIST 100</span>
+                <span className="text-sm font-mono font-bold text-white">
+                  {xu100.price.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                {xu100.change !== 0 && (
+                  <span className={`flex items-center gap-0.5 text-xs font-black ${
+                    xu100.change > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {xu100.change > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {xu100.change > 0 ? '+' : ''}{xu100.change.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            )}
             <div
               className={`flex items-center justify-center gap-2 text-xs font-bold py-2 rounded-xl border ${
                 wsConnected

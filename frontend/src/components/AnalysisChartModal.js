@@ -9,6 +9,15 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '../config';
 
+/* ─── Zaman Aralığı (Interval) Seçenekleri ─── */
+const INTERVALS = [
+  { label: '1DK',    value: '1m' },
+  { label: '5DK',    value: '5m' },
+  { label: '1Saat',  value: '60m' },
+  { label: '3S',     value: '1h' },
+  { label: '1Hafta', value: '1wk' },
+];
+
 /* ─── Periyot Seçenekleri ─── */
 const PERIODS = [
   { label: '1A', value: '1mo' },
@@ -51,6 +60,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('price');
   const [period, setPeriod] = useState('6mo');
+  const [interval, setInterval] = useState('1d');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -58,7 +68,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
     setLoading(true);
     setError(null);
 
-    fetch(`${API_BASE}/api/ai-chart-data/${symbol}?period=${period}`)
+    fetch(`${API_BASE}/api/ai-chart-data/${symbol}?period=${period}&interval=${interval}`)
       .then(res => res.json())
       .then(d => {
         if (d.error) {
@@ -70,15 +80,20 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
       })
       .catch(() => setError('Grafik verisi yüklenemedi.'))
       .finally(() => setLoading(false));
-  }, [isOpen, symbol, period]);
+  }, [isOpen, symbol, period, interval]);
 
   if (!isOpen) return null;
 
   // Son veri noktasını al
   const lastPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null;
 
-  // X-axis tick formatter
+  // X-axis tick formatter (intraday vs daily)
+  const isIntraday = ['1m', '5m', '60m', '1h'].includes(interval);
   const formatDate = (d) => {
+    if (isIntraday && d.includes(' ')) {
+      // "2026-02-24 14:30" → "14:30"
+      return d.split(' ')[1];
+    }
     const parts = d.split('-');
     return `${parts[2]}/${parts[1]}`;
   };
@@ -143,21 +158,40 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
             ))}
           </div>
 
-          {/* Periyot Seçimi */}
-          <div className="flex gap-1 bg-white/5 p-1 rounded-2xl">
-            {PERIODS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  period === p.value
-                    ? 'bg-white/10 text-white'
-                    : 'text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          {/* Zaman Aralığı (Interval) Seçimi */}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1 bg-white/5 p-1 rounded-2xl">
+              {INTERVALS.map(iv => (
+                <button
+                  key={iv.value}
+                  onClick={() => { setInterval(iv.value); }}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    interval === iv.value
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {iv.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Periyot Seçimi */}
+            <div className="flex gap-1 bg-white/5 p-1 rounded-2xl">
+              {PERIODS.map(p => (
+                <button
+                  key={p.value}
+                  onClick={() => { setInterval('1d'); setPeriod(p.value); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    interval === '1d' && period === p.value
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -201,7 +235,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                     Fiyat Grafiği — Bollinger Bantları &amp; Hareketli Ortalamalar
                   </h4>
                   <ResponsiveContainer width="100%" height={400}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 15, bottom: 5 }}>
                       <defs>
                         <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15} />
@@ -214,7 +248,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} />
+                      <YAxis domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} width={65} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
 
@@ -249,7 +283,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                     RSI (Relative Strength Index) — Aşırı Alım / Aşırı Satım Bölgeleri
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 50, left: 10, bottom: 5 }}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 55, left: 15, bottom: 5 }}>
                       <defs>
                         <linearGradient id="rsiGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -258,8 +292,8 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="rsi" domain={[0, 100]} ticks={[0, 20, 30, 50, 70, 80, 100]} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} />
+                      <YAxis yAxisId="rsi" domain={[0, 100]} ticks={[0, 20, 30, 50, 70, 80, 100]} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
+                      <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} width={65} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
 
@@ -299,11 +333,11 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                     MACD (Moving Average Convergence Divergence)
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 50, left: 10, bottom: 5 }}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 55, left: 15, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="macd" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} />
+                      <YAxis yAxisId="macd" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={55} />
+                      <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} width={65} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
                       <ReferenceLine yAxisId="macd" y={0} stroke="rgba(255,255,255,0.1)" />
@@ -346,11 +380,11 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                     İşlem Hacmi &amp; 20 Günlük Ortalama
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 50, left: 10, bottom: 5 }}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 55, left: 15, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="volume" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v} />
-                      <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} />
+                      <YAxis yAxisId="volume" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v} width={55} />
+                      <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} tick={{ fill: '#f59e0b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} width={65} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
 
@@ -382,7 +416,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                     Fibonacci Düzeltme Seviyeleri (Retracement)
                   </h4>
                   <ResponsiveContainer width="100%" height={400}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 15, bottom: 5 }}>
                       <defs>
                         <linearGradient id="fibPriceGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15} />
@@ -391,16 +425,16 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                       <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis domain={['auto', 'auto']} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} />
+                      <YAxis domain={[fibLow * 0.95, fibHigh * 1.05]} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₺${v}`} width={65} />
                       <Tooltip content={<ChartTooltip />} />
 
                       {/* Fiyat */}
                       <Area type="monotone" dataKey="close" stroke="#3b82f6" strokeWidth={2} fill="url(#fibPriceGrad)" name="Kapanış" />
 
-                      {/* Fibonacci Seviyeleri */}
+                      {/* Fibonacci Seviyeleri — etiket sağ tarafa */}
                       {fibLevels.map((fib, i) => (
                         <ReferenceLine key={i} y={fib.value} stroke={fib.color} strokeDasharray="6 3" strokeWidth={1.5}
-                          label={{ value: `${fib.label} (₺${fib.value})`, position: 'left', fill: fib.color, fontSize: 10, fontWeight: 'bold' }} />
+                          label={{ value: `${fib.pct} ₺${fib.value}`, position: 'right', fill: fib.color, fontSize: 10, fontWeight: 'bold' }} />
                       ))}
                     </ComposedChart>
                   </ResponsiveContainer>

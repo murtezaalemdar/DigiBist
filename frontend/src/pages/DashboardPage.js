@@ -225,6 +225,14 @@ const DashboardPage = ({
               )}
               <h3 className="text-3xl sm:text-4xl md:text-5xl font-extrabold mb-4 italic font-mono tracking-tighter">
                 ₺{displayPrice !== null ? Number(displayPrice).toFixed(2) : '—'}
+                {livePrice?.change !== undefined && livePrice.change !== 0 && (
+                  <span className={`inline-flex items-center gap-1 ml-2 text-base sm:text-lg font-black not-italic align-middle ${
+                    livePrice.change > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {livePrice.change > 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+                    {livePrice.change > 0 ? '+' : ''}{livePrice.change.toFixed(2)}%
+                  </span>
+                )}
               </h3>
               <div className="flex items-center gap-2 text-sm">
                 <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded-lg font-bold">

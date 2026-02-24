@@ -286,26 +286,27 @@ const AppContent = () => {
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full" />
         </div>
 
-        {/* NAV */}
-        <Navbar
-          activePage={activePage}
-          setActivePage={setActivePage}
-          wsConnected={wsConnected}
-          priceProvider={priceProvider}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-        />
-
-        {/* CANLI TICKER */}
-        <LiveTicker
-          prices={livePrices}
-          isConnected={wsConnected}
-          speed={tickerSpeed}
-          onSymbolClick={(sym) => {
-            setSelectedSymbol(sym);
-            setActivePage('dashboard');
-          }}
-        />
+        {/* NAV + CANLI TICKER — sabit üst bar */}
+        <div className="sticky top-0 z-50 bg-[#070b14]/95 backdrop-blur-md">
+          <Navbar
+            activePage={activePage}
+            setActivePage={setActivePage}
+            wsConnected={wsConnected}
+            priceProvider={priceProvider}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            livePrices={livePrices}
+          />
+          <LiveTicker
+            prices={livePrices}
+            isConnected={wsConnected}
+            speed={tickerSpeed}
+            onSymbolClick={(sym) => {
+              setSelectedSymbol(sym);
+              setActivePage('dashboard');
+            }}
+          />
+        </div>
 
         <main className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">

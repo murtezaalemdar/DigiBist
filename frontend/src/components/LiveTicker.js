@@ -3,7 +3,7 @@ import { Wifi, WifiOff } from 'lucide-react';
 
 /** Üst kısımda sürekli kayan canlı fiyat şeridi */
 const LiveTicker = ({ prices, isConnected, speed = 120, onSymbolClick }) => {
-  const entries = Object.entries(prices);
+  const entries = Object.entries(prices).filter(([sym]) => sym !== 'XU100');
   const trackRef = useRef(null);
   const [paused, setPaused] = useState(false);
   const [duration, setDuration] = useState(60);

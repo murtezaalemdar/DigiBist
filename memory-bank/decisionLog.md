@@ -15,3 +15,8 @@
 | 2026-02-24 | MACD Histogram Cell pattern | `<rect>` yerine recharts `<Cell>` component kullanıldı — her bar'ın yeşil/kırmızı rengi doğru render ediliyor |
 | 2026-02-24 | deploy.ps1 otomatik versiyon artırma | Kullanıcı her deploy'da versiyon artırmayı unutuyordu. PowerShell betiği config.js'den regex ile versiyon okuyup otomatik artırır |
 | 2026-02-24 | WebSocket interval 10s→60s | Borsa verisi zaten saniyede değişmiyor, 60s yeterli. CPU/ağ yükü 6x azaldı. Frontend dinamik countdown eklendi |
+| 2026-02-24 | Grafik interval backend parametresi | yfinance farklı interval'lar için farklı max period kısıtlaması var. interval_limits dict ile her interval için uygun period/fetch mantığı |
+| 2026-02-24 | Fibonacci labels sağa taşındı | Sol margin dar olduğundan etiketler kesiliyor ve üşt üşte biniyordu. position:'right' + kısa format + sabit Y domain çözümü |
+| 2026-02-24 | Sticky header wrapper pattern | Navbar ve LiveTicker ayrı sticky yerine tek parent div ile sarıldı. İkisi birlikte scroll'da sabit kalıyor |
+| 2026-02-24 | XU100 endeks Navbar'da gösterim | BIST100 endeks değeri yatırımcı için önemli referans. WS döngüsünde yfinance XU100.IS çekilir, Navbar badge olarak gösterilir |
+| 2026-02-24 | Sidebar filterText ayrı state | Navbar searchQuery global filtre (App.js filteredStocks), Sidebar filterText lokal filtre. İkisi bağımsız çalışır |

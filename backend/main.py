@@ -273,7 +273,7 @@ async def get_forecast(symbol: str, notify: bool = False, force: bool = False):
 # 1.5) AI GRAFİK VERİSİ ENDPOİNTİ (Tarihsel fiyat + indikatörler)
 # ─────────────────────────────────────────────
 @app.get("/api/ai-chart-data/{symbol}")
-async def get_chart_data(symbol: str, period: str = "6mo"):
+async def get_chart_data(symbol: str, period: str = "6mo", interval: str = "1d"):
     """Tarihsel fiyat verisi + teknik indikatörleri JSON olarak döndür."""
     import yfinance as yf
     import pandas as pd
@@ -281,11 +281,28 @@ async def get_chart_data(symbol: str, period: str = "6mo"):
 
     ticker = f"{symbol}.IS"
 
-    # Kısa periyotlarda yeterli indikatör verisi için ekstra geçmiş çek
-    fetch_map = {"1mo": "6mo", "3mo": "1y", "6mo": "2y", "1y": "5y", "2y": "5y"}
-    fetch_period = fetch_map.get(period, "2y")
+    # İnterval'e göre uygun periyot sınırlamaları (yfinance kısıtları)
+    interval_limits = {
+        "1m":  {"max_period": "7d",  "default_period": "1d"},
+        "5m":  {"max_period": "60d", "default_period": "5d"},
+        "15m": {"max_period": "60d", "default_period": "5d"},
+        "60m": {"max_period": "730d","default_period": "1mo"},
+        "1h":  {"max_period": "730d","default_period": "1mo"},
+        "1d":  {"max_period": "10y", "default_period": "6mo"},
+        "1wk": {"max_period": "10y", "default_period": "2y"},
+    }
 
-    data = yf.download(ticker, period=fetch_period, interval="1d", progress=False)
+    # İntraday interval ise periyodu otomatik ayarla
+    if interval != "1d":
+        limits = interval_limits.get(interval, {"max_period": "2y", "default_period": period})
+        fetch_period = limits["default_period"]
+        # İntraday veri çekilirken ekstra geçmiş gerekmiyor, direkt çek
+        data = yf.download(ticker, period=fetch_period, interval=interval, progress=False)
+    else:
+        # Günlük veri — kısa periyotlarda yeterli indikatör verisi için ekstra geçmiş çek
+        fetch_map = {"1mo": "6mo", "3mo": "1y", "6mo": "2y", "1y": "5y", "2y": "5y"}
+        fetch_period = fetch_map.get(period, "2y")
+        data = yf.download(ticker, period=fetch_period, interval="1d", progress=False)
 
     if data.empty:
         return {"error": "Veri bulunamadı."}
@@ -330,17 +347,25 @@ async def get_chart_data(symbol: str, period: str = "6mo"):
     # Tüm indikatörler hesaplandıktan sonra NaN satırları at
     df = df.dropna()
 
-    # Şimdi istenen periyoda göre kes
-    period_days = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730}
-    days = period_days.get(period, 180)
-    if len(df) > days:
-        df = df.iloc[-days:]
+    # Günlük veri ise istenen periyoda göre kes
+    if interval == "1d":
+        period_days = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730}
+        days = period_days.get(period, 180)
+        if len(df) > days:
+            df = df.iloc[-days:]
+
+    # İntraday ise tarih+saat, günlük ise sadece tarih formatı
+    is_intraday = interval in ("1m", "5m", "15m", "60m", "1h")
 
     # JSON serileştir
     records = []
     for idx, row in df.iterrows():
+        if is_intraday:
+            date_str = idx.strftime("%Y-%m-%d %H:%M")
+        else:
+            date_str = idx.strftime("%Y-%m-%d")
         records.append({
-            "date": idx.strftime("%Y-%m-%d"),
+            "date": date_str,
             "close": round(float(row['Close']), 2),
             "open": round(float(row['Open']), 2),
             "high": round(float(row['High']), 2),
@@ -361,6 +386,7 @@ async def get_chart_data(symbol: str, period: str = "6mo"):
     return {
         "symbol": symbol,
         "period": period,
+        "interval": interval,
         "count": len(records),
         "data": records,
     }
@@ -708,6 +734,28 @@ async def _fetch_batch_prices() -> dict[str, dict]:
 
     valid = sum(1 for v in prices.values() if v.get("price", 0) > 0)
     logger.info(f"Fiyat çekme bitti: {valid}/{len(prices)} hisse (kaynak: {provider})")
+
+    # ── Adım 5: BIST 100 endeks verisini çek (XU100.IS) ──
+    try:
+        from app.ml_engine.model import _yfinance_lock
+        def _fetch_xu100():
+            with _yfinance_lock:
+                t = yf.Ticker("XU100.IS")
+                hist = t.history(period="5d")
+                if hist is not None and len(hist) >= 2:
+                    last_close = float(hist["Close"].iloc[-1])
+                    prev_close = float(hist["Close"].iloc[-2])
+                    change_pct = round(((last_close - prev_close) / prev_close) * 100, 2) if prev_close > 0 else 0
+                    return {"price": round(last_close, 2), "change": change_pct}
+                elif hist is not None and len(hist) >= 1:
+                    return {"price": round(float(hist["Close"].iloc[-1]), 2), "change": 0}
+            return None
+        xu100_data = await loop.run_in_executor(None, _fetch_xu100)
+        if xu100_data:
+            prices["XU100"] = {"price": xu100_data["price"], "signal": "—", "change": xu100_data["change"]}
+            logger.info(f"BIST100 endeks: {xu100_data['price']} ({xu100_data['change']:+.2f}%)")
+    except Exception as e:
+        logger.warning(f"XU100 endeks verisi çekilemedi: {e}")
 
     # Fiyatları DB'ye de yaz
     try:
