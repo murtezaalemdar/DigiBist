@@ -20,8 +20,9 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import NotificationBell from './NotificationBell';
 
-const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConnected, priceProvider, livePrices = {} }) => {
+const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConnected, priceProvider, livePrices = {}, notifications, onSymbolClick }) => {
   const { user, logout, login, hasPermission } = useAuth();
   const xu100 = livePrices['XU100'] || null;
   const [showLogin, setShowLogin] = useState(false);
@@ -145,6 +146,20 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
 
           {/* WS indicator — mobile only (dot) */}
           <div className={`md:hidden w-2 h-2 rounded-full ${wsConnected ? 'bg-green-400 animate-pulse' : 'bg-slate-600'}`} title={wsConnected ? 'Bağlı' : 'Bağlanıyor'} />
+
+          {/* Bildirim Zili */}
+          {notifications && (
+            <NotificationBell
+              alerts={notifications.alerts}
+              unreadCount={notifications.unreadCount}
+              onMarkRead={notifications.markRead}
+              onMarkAllRead={notifications.markAllRead}
+              onClearAll={notifications.clearAll}
+              onRequestPermission={notifications.requestPermission}
+              notificationPermission={notifications.notificationPermission}
+              onSymbolClick={onSymbolClick}
+            />
+          )}
 
           {/* Search */}
           <div className="relative group hidden sm:block">

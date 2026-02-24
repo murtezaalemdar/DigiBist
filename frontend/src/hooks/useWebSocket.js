@@ -4,8 +4,9 @@ import { WS_BASE } from '../config';
 /**
  * WebSocket hook — gerçek zamanlı piyasa verisi akışı.
  * Otomatik yeniden bağlanma mantığı içerir.
+ * OPPORTUNITY_ALERT mesajlarını onAlert callback'i ile iletir.
  */
-export default function useWebSocket() {
+export default function useWebSocket(onAlert) {
   const [livePrices, setLivePrices] = useState({});
   const [wsConnected, setWsConnected] = useState(false);
   const [priceProvider, setPriceProvider] = useState('none');
@@ -14,6 +15,10 @@ export default function useWebSocket() {
   const lastUpdateRef = useRef(null);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const onAlertRef = useRef(onAlert);
+
+  // onAlert değiştiğinde ref güncelle (closure stale olmasın)
+  useEffect(() => { onAlertRef.current = onAlert; }, [onAlert]);
 
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
@@ -40,6 +45,11 @@ export default function useWebSocket() {
             lastUpdateRef.current = now;
             setLastPriceUpdate(now);
             if (msg.provider) setPriceProvider(msg.provider);
+          } else if (msg.type === 'OPPORTUNITY_ALERT' && msg.alert) {
+            // Fırsat bildirimi geldi — callback ile ilet
+            if (onAlertRef.current) {
+              onAlertRef.current(msg.alert);
+            }
           }
         } catch (e) {
           console.error('WS mesaj hatası:', e);

@@ -3,6 +3,7 @@ import { BrainCircuit, ShieldX } from 'lucide-react';
 
 import { API_BASE, APP_VERSION_FULL } from './config';
 import useWebSocket from './hooks/useWebSocket';
+import useNotifications from './hooks/useNotifications';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LiveTicker from './components/LiveTicker';
 import Navbar from './components/Navbar';
@@ -99,8 +100,9 @@ const AppContent = () => {
     active_exchange: 'BIST',
   });
 
-  // WebSocket hook
-  const { livePrices, wsConnected, priceProvider, lastPriceUpdate, updateInterval } = useWebSocket();
+  // WebSocket hook + Bildirim hook
+  const notifications = useNotifications();
+  const { livePrices, wsConnected, priceProvider, lastPriceUpdate, updateInterval } = useWebSocket(notifications.handleNewAlert);
 
   // Favorileri localStorage'a kaydet
   useEffect(() => { localStorage.setItem('bist_favorites', JSON.stringify(favorites)); }, [favorites]);
@@ -296,6 +298,11 @@ const AppContent = () => {
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             livePrices={livePrices}
+            notifications={notifications}
+            onSymbolClick={(sym) => {
+              setSelectedSymbol(sym);
+              setActivePage('dashboard');
+            }}
           />
           <LiveTicker
             prices={livePrices}

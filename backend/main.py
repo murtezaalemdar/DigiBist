@@ -5,6 +5,7 @@ from app.ml_engine.model import BISTAIModel
 from app.core.ws_manager import manager
 from app.core.risk_engine import RiskEngine
 from app.core.telegram_notifier import TelegramNotifier
+from app.core.opportunity_scanner import opportunity_scanner, PRIORITY_CRITICAL, PRIORITY_HIGH
 from app.core.database import (
     db_health_check,
     get_cached_forecast,
@@ -307,6 +308,27 @@ async def get_forecast(symbol: str, notify: bool = False, force: bool = False):
             predicted_price=result["predicted_price"],
             confidence=result["confidence"]
         )
+
+    # ── Fırsat Tarama: Forecast sonucunu analiz et ──
+    try:
+        new_alerts = await opportunity_scanner.scan_stock(symbol, result)
+        if new_alerts:
+            logger.info(f"[{symbol}] {len(new_alerts)} yeni fırsat bulundu")
+            # Kritik ve yüksek öncelikli alertleri Telegram'dan bildir
+            for alert in new_alerts:
+                if alert.get("priority") in (PRIORITY_CRITICAL, PRIORITY_HIGH):
+                    msg = f"{alert.get('emoji', '🔔')} {alert['title']}\n{alert['message']}"
+                    await TelegramNotifier.send_message(msg)
+            # WebSocket ile bağlı tüm istemcilere bildir
+            for alert in new_alerts:
+                await manager.broadcast({
+                    "type": "OPPORTUNITY_ALERT",
+                    "alert": alert,
+                    "timestamp": time.time(),
+                    "unread_count": opportunity_scanner.unread_count,
+                })
+    except Exception as exc:
+        logger.warning(f"Fırsat tarama hatası ({symbol}): {exc}")
 
     return result
 
@@ -1087,6 +1109,51 @@ async def get_kap_news(symbol: str):
 
     _kap_news_cache[symbol] = {"ts": now, "data": result}
     return result
+
+
+# ─────────────────────────────────────────────
+# 5.6) FIRSAT BİLDİRİM SİSTEMİ (Opportunity Alerts)
+# ─────────────────────────────────────────────
+@app.get("/api/alerts")
+async def get_alerts(limit: int = 50, unread_only: bool = False):
+    """Fırsat bildirimlerini listele."""
+    alerts = opportunity_scanner.alerts
+    if unread_only:
+        alerts = [a for a in alerts if not a.get("read", False)]
+    return {
+        "alerts": alerts[:limit],
+        "total": len(opportunity_scanner._alerts),
+        "unread_count": opportunity_scanner.unread_count,
+    }
+
+
+@app.post("/api/alerts/read/{alert_id}")
+async def mark_alert_read(alert_id: str):
+    """Belirli bir bildirimi okundu olarak işaretle."""
+    ok = opportunity_scanner.mark_read(alert_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Bildirim bulunamadı.")
+    return {"status": "ok", "unread_count": opportunity_scanner.unread_count}
+
+
+@app.post("/api/alerts/read-all")
+async def mark_all_alerts_read():
+    """Tüm bildirimleri okundu olarak işaretle."""
+    count = opportunity_scanner.mark_all_read()
+    return {"status": "ok", "marked": count, "unread_count": 0}
+
+
+@app.delete("/api/alerts")
+async def clear_all_alerts():
+    """Tüm bildirimleri sil."""
+    opportunity_scanner.clear_alerts()
+    return {"status": "ok", "message": "Tüm bildirimler silindi."}
+
+
+@app.get("/api/alerts/status")
+async def alerts_status():
+    """Fırsat tarayıcı durum bilgisi."""
+    return opportunity_scanner.get_status()
 
 
 # ─────────────────────────────────────────────
