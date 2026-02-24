@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BrainCircuit, ShieldX } from 'lucide-react';
 
-import { API_BASE, ADMIN_API_BASE, APP_VERSION_FULL } from './config';
+import { API_BASE, APP_VERSION_FULL } from './config';
 import useWebSocket from './hooks/useWebSocket';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LiveTicker from './components/LiveTicker';
@@ -172,17 +172,17 @@ const AppContent = () => {
 
   const loadTradingState = useCallback(() => {
     fetch(`${API_BASE}/api/auto-trade/status`)
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(d => setAutoTradeStatus(d || { enabled: false, config: {}, recent_logs: [] }))
       .catch(() => { });
 
     fetch(`${API_BASE}/api/order/history?limit=20`)
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(d => setOrderHistory(d.orders || []))
       .catch(() => { });
 
     fetch(`${API_BASE}/api/broker/status`)
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(d => setBrokerStatus(d))
       .catch(() => { });
   }, []);
@@ -214,7 +214,7 @@ const AppContent = () => {
         notes: manualOrder.notes || '',
       }),
     })
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(d => { setTradeResult(d); loadTradingState(); })
       .catch(() => setTradeResult({ status: 'error', reason: 'Emir gönderilemedi' }))
       .finally(() => setTradeLoading(false));
@@ -252,7 +252,7 @@ const AppContent = () => {
       headers: { 'Content-Type': 'application/json' },
       body: action === 'stop' ? undefined : JSON.stringify(body),
     })
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(d => { setTradeResult(d); loadTradingState(); })
       .catch(() => setTradeResult({ status: 'error', reason: 'Auto trade işlemi başarısız' }))
       .finally(() => setTradeLoading(false));
@@ -266,7 +266,7 @@ const AppContent = () => {
       // Cache'i atla, yeniden analiz yap
       setLoading(true);
       fetch(`${API_BASE}/api/ai-forecast/${selectedSymbol}?force=true`)
-        .then(res => res.json())
+        .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
         .then(d => { setData(d); setLoading(false); setIsRefreshing(false); })
         .catch(() => { setLoading(false); setIsRefreshing(false); });
     } else {
@@ -329,7 +329,7 @@ const AppContent = () => {
             <div className={activePage === 'dashboard' ? 'lg:col-span-9 order-1 lg:order-2' : 'lg:col-span-12 order-1'}>
 
               {activePage === 'portfolio' && (
-                user && !hasPermission('portfolio.view') ? <AccessDenied pageName={PAGE_NAMES.portfolio} /> :
+                (!user || !hasPermission('portfolio.view')) ? <AccessDenied pageName={PAGE_NAMES.portfolio} /> :
                 <PortfolioPage
                   stocks={stocks}
                   livePrices={livePrices}
@@ -341,12 +341,12 @@ const AppContent = () => {
               )}
 
               {activePage === 'models' && (
-                user && !hasPermission('models.view') ? <AccessDenied pageName={PAGE_NAMES.models} /> :
+                (!user || !hasPermission('models.view')) ? <AccessDenied pageName={PAGE_NAMES.models} /> :
                 <ModelsPage wsConnected={wsConnected} livePrices={livePrices} />
               )}
 
               {activePage === 'settings' && (
-                user && !hasPermission('settings.view') ? <AccessDenied pageName={PAGE_NAMES.settings} /> :
+                (!user || !hasPermission('settings.view')) ? <AccessDenied pageName={PAGE_NAMES.settings} /> :
                 <SettingsPage
                   wsConnected={wsConnected}
                   stocks={stocks}
@@ -360,7 +360,7 @@ const AppContent = () => {
               )}
 
               {activePage === 'trade' && (
-                user && !hasPermission('trade.view') ? <AccessDenied pageName={PAGE_NAMES.trade} /> :
+                (!user || !hasPermission('trade.view')) ? <AccessDenied pageName={PAGE_NAMES.trade} /> :
                 <TradePage
                   manualOrder={manualOrder}
                   setManualOrder={setManualOrder}
@@ -381,12 +381,12 @@ const AppContent = () => {
               )}
 
               {activePage === 'users' && (
-                user && !hasPermission('users.view') ? <AccessDenied pageName={PAGE_NAMES.users} /> :
+                (!user || !hasPermission('users.view')) ? <AccessDenied pageName={PAGE_NAMES.users} /> :
                 <UserManagementPage />
               )}
 
               {activePage === 'dashboard' && (
-                user && !hasPermission('dashboard.view') ? <AccessDenied pageName={PAGE_NAMES.dashboard} /> :
+                (!user || !hasPermission('dashboard.view')) ? <AccessDenied pageName={PAGE_NAMES.dashboard} /> :
                 <DashboardPage
                   selectedSymbol={selectedSymbol}
                   stocks={stocks}

@@ -6,4 +6,4 @@ export const WS_BASE = process.env.REACT_APP_WS_URL || (isDev ? 'ws://localhost:
 
 /* Versiyon — her deploy'da burayı artır */
 export const APP_VERSION = 'v8.06';
-export const APP_VERSION_FULL = 'v8.06.01';
+export const APP_VERSION_FULL = 'v8.06.02';

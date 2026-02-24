@@ -404,10 +404,13 @@ async def save_order_v2(order_dict: dict) -> dict:
 
         # V2 alanlarını güncelle (ALTER TABLE ile eklenen kolonlar)
         v2_fields = {}
-        for field in ["order_type", "trigger_price", "stop_price", "take_profit_price",
-                       "trailing_stop_pct", "spread", "slippage", "slippage_pct",
-                       "strategy_type", "ai_confidence", "ai_signal",
-                       "indicators_snapshot", "pnl", "pnl_pct", "notes", "user_id"]:
+        _ALLOWED_V2_COLUMNS = {
+            "order_type", "trigger_price", "stop_price", "take_profit_price",
+            "trailing_stop_pct", "spread", "slippage", "slippage_pct",
+            "strategy_type", "ai_confidence", "ai_signal",
+            "indicators_snapshot", "pnl", "pnl_pct", "notes", "user_id",
+        }
+        for field in _ALLOWED_V2_COLUMNS:
             if field in order_dict and order_dict[field] is not None:
                 v2_fields[field] = order_dict[field]
 

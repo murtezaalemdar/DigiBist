@@ -24,6 +24,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { API_BASE, ADMIN_API_BASE, WS_BASE } from '../config';
+import { useAuth } from '../hooks/useAuth';
 
 /* ─── Broker bilgileri (icon + renk) ─── */
 const BROKER_META = {
@@ -49,6 +50,7 @@ const SettingsPage = ({
   brokerStatus,
   setBrokerStatus,
 }) => {
+  const { authFetch } = useAuth();
   const [brokers, setBrokers] = useState([]);
   const [activeBroker, setActiveBroker] = useState('paper');
   const [activeExchange, setActiveExchange] = useState('BIST');
@@ -62,24 +64,24 @@ const SettingsPage = ({
   /* ─── Broker listesini çek ─── */
   const fetchBrokers = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/broker/list`);
+      const res = await authFetch(`${API_BASE}/api/broker/list`);
       const data = await res.json();
       setBrokers(data.brokers || []);
       setActiveBroker(data.active_broker || 'paper');
       setActiveExchange(data.active_exchange || 'BIST');
     } catch (e) { console.error('Broker list fetch error:', e); }
-  }, []);
+  }, [authFetch]);
 
   /* ─── Broker durumunu çek ─── */
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/broker/status`);
+      const res = await authFetch(`${API_BASE}/api/broker/status`);
       const data = await res.json();
       if (setBrokerStatus) setBrokerStatus(data);
       setActiveBroker(data.broker_type || 'paper');
       setActiveExchange(data.active_exchange || 'BIST');
     } catch (e) { console.error('Broker status fetch error:', e); }
-  }, [setBrokerStatus]);
+  }, [setBrokerStatus, authFetch]);
 
   useEffect(() => {
     fetchBrokers();
@@ -89,7 +91,7 @@ const SettingsPage = ({
   /* ─── Broker config alanlarını çek ─── */
   const fetchBrokerConfig = async (brokerType) => {
     try {
-      const res = await fetch(`${API_BASE}/api/broker/config/${brokerType}`);
+      const res = await authFetch(`${API_BASE}/api/broker/config/${brokerType}`);
       const data = await res.json();
       setBrokerConfigs(prev => ({
         ...prev,
@@ -115,7 +117,7 @@ const SettingsPage = ({
     setSaving(true);
     try {
       const values = brokerConfigs[brokerType]?.values || {};
-      await fetch(`${API_BASE}/api/broker/config/${brokerType}`, {
+      await authFetch(`${API_BASE}/api/broker/config/${brokerType}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
@@ -135,13 +137,13 @@ const SettingsPage = ({
     try {
       // Önce config'i kaydet
       const values = brokerConfigs[brokerType]?.values || {};
-      await fetch(`${API_BASE}/api/broker/config/${brokerType}`, {
+      await authFetch(`${API_BASE}/api/broker/config/${brokerType}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       });
       // Bağlan
-      const res = await fetch(`${API_BASE}/api/broker/connect`, {
+      const res = await authFetch(`${API_BASE}/api/broker/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ broker_type: brokerType, exchange: activeExchange }),
@@ -165,7 +167,7 @@ const SettingsPage = ({
   /* ─── Bağlantıyı kes ─── */
   const disconnectBroker = async () => {
     try {
-      await fetch(`${API_BASE}/api/broker/disconnect`, { method: 'POST' });
+      await authFetch(`${API_BASE}/api/broker/disconnect`, { method: 'POST' });
       setActiveBroker('paper');
       setStatusMsg({ type: 'success', text: 'Broker bağlantısı kesildi. Paper moda geçildi.' });
       fetchStatus();
@@ -178,7 +180,7 @@ const SettingsPage = ({
   /* ─── Borsa değiştir ─── */
   const changeExchange = async (exchange) => {
     try {
-      await fetch(`${API_BASE}/api/broker/exchange`, {
+      await authFetch(`${API_BASE}/api/broker/exchange`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ exchange }),

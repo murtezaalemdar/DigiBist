@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.ml_engine.model import BISTAIModel
 from app.core.ws_manager import manager
@@ -73,7 +73,7 @@ ALLOWED_ORIGINS = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -115,6 +115,10 @@ execution_engine._broker_manager = broker_manager
 
 # WS batch: bellekte tutacağımız son fiyatlar (DB'ye gitmeden WS'e hızlı cevap)
 _ws_price_cache: dict[str, dict] = {}
+
+# Fiyat kaynağı takip değişkenleri
+_last_provider: str = "none"
+_provider_switches: int = 0
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -363,7 +367,7 @@ async def get_chart_data(symbol: str, period: str = "6mo", interval: str = "1d")
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
+    rs = gain / loss.replace(0, float('nan'))
     df['RSI'] = 100 - (100 / (1 + rs))
 
     # MACD
@@ -704,7 +708,7 @@ async def _fetch_batch_prices() -> dict[str, dict]:
             cached_signals[sym] = _ws_price_cache[sym].get("signal", "—")
 
     # ── Adım 2: Canlı fiyatları çek (TradingView → Yahoo Spark) ──
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         live_prices, provider = await loop.run_in_executor(
             None, fetch_live_prices, watched
@@ -1172,7 +1176,7 @@ async def broker_config_fields(broker_type: str):
 
 
 @app.post("/api/broker/config/{broker_type}")
-async def save_broker_config(broker_type: str, config: dict):
+async def save_broker_config(broker_type: str, config: dict, user: UserInfo = Depends(require_auth)):
     """Broker konfigürasyonunu kaydet (API key'ler vb.)."""
     # Maskeli değerleri eski config'den koru
     old_config = broker_manager.get_broker_config(broker_type)
@@ -1187,7 +1191,7 @@ async def save_broker_config(broker_type: str, config: dict):
 
 
 @app.post("/api/broker/connect")
-async def broker_connect(payload: dict):
+async def broker_connect(payload: dict, user: UserInfo = Depends(require_auth)):
     """
     Broker'a bağlan.
     Body: { "broker_type": "ibkr", "exchange": "BIST" }
@@ -1200,14 +1204,14 @@ async def broker_connect(payload: dict):
 
 
 @app.post("/api/broker/disconnect")
-async def broker_disconnect():
+async def broker_disconnect(user: UserInfo = Depends(require_auth)):
     """Mevcut broker bağlantısını kes."""
     await broker_manager.disconnect_current()
     return {"status": "ok", "message": "Broker bağlantısı kesildi."}
 
 
 @app.post("/api/broker/exchange")
-async def set_exchange(payload: dict):
+async def set_exchange(payload: dict, user: UserInfo = Depends(require_auth)):
     """Aktif borsayı değiştir. Body: { "exchange": "NYSE" }"""
     exchange = payload.get("exchange", "BIST")
     broker_manager.set_exchange(exchange)

@@ -42,7 +42,7 @@ class TelegramNotifier:
                              predicted_price: float, confidence: float) -> bool:
         emoji = SIGNAL_EMOJI.get(signal, "⚪")
         diff = predicted_price - current_price
-        diff_pct = (diff / current_price) * 100
+        diff_pct = (diff / current_price) * 100 if current_price > 0 else 0
         direction = "▲" if diff > 0 else "▼"
 
         message = (

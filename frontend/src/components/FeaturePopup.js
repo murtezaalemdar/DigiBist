@@ -249,7 +249,7 @@ const FeaturePopup = ({ isOpen, onClose, featureName, data }) => {
 
           {/* Alt bilgi */}
           <div className="text-[10px] text-slate-600 text-center pt-1 border-t border-white/5">
-            Toplam {allFeatures.length} gösterge arasında #{rank} sırada • Model: {data.best_model}
+            Toplam {allFeatures.length} gösterge arasında #{rank} sırada • Model: {data.model_name}
           </div>
         </div>
       </div>

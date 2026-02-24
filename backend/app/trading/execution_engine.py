@@ -213,8 +213,10 @@ class ExecutionEngine:
                 symbol=symbol,
                 side=side,
                 quantity=quantity,
+                exchange=status.get("active_exchange", "BIST"),
                 order_type=order_type,
-                price=fill_price if order_type == "limit" else None,
+                limit_price=fill_price if order_type == "limit" else None,
+                stop_price=stop_price,
             )
 
             return {

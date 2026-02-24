@@ -60,7 +60,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('price');
   const [period, setPeriod] = useState('6mo');
-  const [interval, setInterval] = useState('1d');
+  const [interval, setChartInterval] = useState('1d');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -164,7 +164,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
               {INTERVALS.map(iv => (
                 <button
                   key={iv.value}
-                  onClick={() => { setInterval(iv.value); }}
+                  onClick={() => { setChartInterval(iv.value); }}
                   className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     interval === iv.value
                       ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'
@@ -181,7 +181,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
               {PERIODS.map(p => (
                 <button
                   key={p.value}
-                  onClick={() => { setInterval('1d'); setPeriod(p.value); }}
+                  onClick={() => { setChartInterval('1d'); setPeriod(p.value); }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     interval === '1d' && period === p.value
                       ? 'bg-white/10 text-white'
