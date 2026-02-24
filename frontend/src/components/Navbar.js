@@ -73,7 +73,7 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
   };
 
   return (
-    <nav className="border-b border-white/5 bg-black/20 backdrop-blur-md">
+    <nav className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-md">
       <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 h-14 sm:h-16 flex items-center justify-between">
         {/* Logo — tıklayınca Dashboard'a git */}
         <button

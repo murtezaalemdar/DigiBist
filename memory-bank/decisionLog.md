@@ -21,3 +21,14 @@
 | 2026-02-24 | XU100 endeks Navbar'da gösterim | BIST100 endeks değeri yatırımcı için önemli referans. WS döngüsünde yfinance XU100.IS çekilir, Navbar badge olarak gösterilir |
 | 2026-02-24 | Sidebar filterText ayrı state | Navbar searchQuery global filtre (App.js filteredStocks), Sidebar filterText lokal filtre. İkisi bağımsız çalışır |
 | 2026-02-24 | v8.06.02 Bug Fix Release - 14 kritik/orta hata düzeltildi. Toplam 54 bug'dan 14'ü fix'lendi, 40'ı düşük öncelikli olarak backlog'da. Production deployment başarılı (commit 63519a5). Backend port conflict sorunu yaşandı ancak çözüldü. | - |
+| 2026-02-24 | v8.07.00 Fırsat Bildirim Sistemi | OpportunityScanner: STRONG_BUY/SELL, RSI_OVERSOLD/OVERBOUGHT, MACD_CROSS, BIG_MOVE, VOLUME_SPIKE, BOLLINGER. 30dk cooldown, max 200 alert in-memory. Forecast sonrası otomatik tarama |
+| 2026-02-24 | Frontend NotificationBell + useNotifications | Browser Notification API + ses uyarısı + WS realtime + 30s polling fallback. Navbar'da çan ikonu + badge + dropdown panel |
+| 2026-02-24 | Backend restart: pkill > fuser | `fuser -k 8000/tcp` güvenilir değil (zombie worker'lar kalabiliyor). `pkill -9 -f uvicorn` tüm process'leri öldürüyor. 3s bekleme zorunlu (kernel socket release) |
+| 2026-02-24 | Frontend deploy sonrası chown zorunlu | SCP root olarak kopyalar → Nginx www-data olarak çalışır → 403 Forbidden. Her deploy'da `chown -R www-data:www-data` + `chmod -R 755` gerekli |
+| 2026-02-24 | RSI Divergence: lookback=5, min_distance=5, dedup=3 | lookback=5: yeterince hassas swing detection. min_distance=5: çok yakın divergence'ları önler. dedup=3: komşu swing'leri birleştirir. Parametreler ayarlanabilir |
+| 2026-02-24 | Divergence UI: Büyük etiketli daireler + Türkçe | Küçük üçgenler kullanıcı için anlaşılmaz bulundu. 3 iterasyon: üçgen → hooks fix → büyük label'lı daire + SVG text + glow + eğitici kutu + sinyal kartları |
+| 2026-02-24 | React Error #310: useMemo hook pozisyonu | `useMemo` hook `if (!isOpen) return null` early return'dan sonraydı. Modal kapalıyken 8 hook, açıkken 9 hook çalışıyordu. Çözüm: tüm hooklar early return öncesine |
+| 2026-02-24 | Login z-index: Navbar relative z-10 | Navbar ve LiveTicker aynı parent içinde (sticky z-50). Login dropdown (z-50) DOM sırasından dolayı LiveTicker'ın altında kalıyordu. Navbar `<nav>`'a `relative z-10` |
+| 2026-02-24 | Kelly DrillDown: Investopedia → Modal rapor | Kelly kutusuna tıklayınca dış link yerine detaylı rapor gösterilmeli. formül hesaplama, strateji istatistikleri, gauge, risk limitleri + Investopedia link altta |
+| 2026-02-24 | Backend: systemd servisi (digibist-backend.service) | `systemctl restart digibist-backend` kullanılmalı. fuser/pkill kullanmak systemd ile çakışma yaratır. Servis otomatik restart yapıyor |
+| 2026-02-24 | Frontend deploy: eski JS bundle temizliği | Birden fazla main.*.js birikiyordu sunucuda. Deploy öncesi `rm -f ...main.*.js` ile temizlenmeli. Tarayıcı cache'den eski bundle'ı yükleyebilir |

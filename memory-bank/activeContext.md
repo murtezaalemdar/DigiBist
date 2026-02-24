@@ -2,36 +2,20 @@
 
 ## Current Goals
 
-- ## Aktif Çalışma - v8.06.02 Deployment Tamamlandı (24 Şubat 2026)
+- ## Aktif Çalışma - v8.08.00 Geliştirme (RSI Divergence + Kelly DrillDown)
 - ### Son Durum
-- - v8.06.02 başarıyla deploy edildi ve production'da çalışıyor
-- - Backend: 4 worker process aktif, tüm endpoint'ler çalışıyor
-- - Frontend: React build deploy edildi, Nginx üzerinden serve ediliyor
-- - GARAN forecast testi başarılı (signal: SELL, confidence: 0.53)
-- ### v8.06.02'de Yapılan Bug Fix'ler (14 fix, 11 dosya)
-- **Backend (8 fix):**
-- 1. main.py: HTTPException global import eklendi
-- 2. main.py: CORS `["*"]` → `ALLOWED_ORIGINS` listesi
-- 3. main.py: `_last_provider`/`_provider_switches` modül seviyesinde initialize
-- 4. main.py: RSI hesaplama divide-by-zero guard
-- 5. main.py: `asyncio.get_event_loop()` → `asyncio.get_running_loop()`
-- 6. database.py: SQL injection koruması (column whitelist)
-- 7. telegram_notifier.py: current_price=0 divide-by-zero guard
-- 8. execution_engine.py: broker place_order() signature düzeltmesi
-- 9. main.py: 4 broker mutation endpoint'e auth eklendi
-- **Frontend (6 fix):**
-- 1. App.js: Authorization bypass düzeltmesi (6 sayfa)
-- 2. App.js: 7 fetch çağrısına res.ok kontrolü
-- 3. App.js: Dead ADMIN_API_BASE import kaldırıldı
-- 4. AnalysisChartModal.js: setInterval → setChartInterval (window.setInterval shadowing)
-- 5. FeaturePopup.js: data.best_model → data.model_name
-- 6. SettingsPage.js: Broker API çağrıları fetch → authFetch
+- - RSI Divergence algılama ve görselleştirme tamamlandı (backend + frontend)
+- - Kelly Criterion tıklandığında detaylı rapor gösterimi eklendi (DrillDownModal)
+- - React Error #310 düzeltildi (useMemo hooks sırası)
+- - Login z-index sorunu düzeltildi (Navbar relative z-10)
+- - Tüm değişiklikler production'a deploy edildi ve test edildi
+- - API testi: GARAN (1 bearish div), THYAO (2 bearish div), FROTO 1y (bullish+bearish)
 - ### Deployment Bilgileri
 - - Server: Ubuntu 24.04, 192.168.0.28, SSH root erişimi
-- - Backend: /opt/digibist/backend/ (uvicorn, 4 workers, port 8000)
+- - Backend: /opt/digibist/backend/ — `systemctl restart digibist-backend` ile yönetilir
 - - Frontend: /opt/digibist/frontend/build/ (Nginx, port 80)
 - - Database: PostgreSQL localhost:5432/bist_trading
-- - Git: commit 63519a5 pushed to origin/main
+- - Git: son commit d46274e (v8.07.00), yeni değişiklikler henüz commit edilmedi
 - ### Bilinen Sorunlar (Düşük Öncelik)
 - - Hardcoded DB password/JWT secret (env vars kullanılmalı)
 - - SSL verification disabled in live_price_provider.py
@@ -42,18 +26,55 @@
 
 ## ⚠️ VERSİYON ARTIRMA — HER DEPLOY'DA ZORUNLU!
 - `deploy.ps1` kullan (otomatik artırır) veya `config.js` APP_VERSION'ı manuel artır
-- Mevcut versiyon: **v8.05** → **v8.06'ya bump edilmeli**
+- Mevcut versiyon: **v8.07.00** → **v8.08.00'a bump edilmeli**
 
 ## Mevcut Durum
 
 Proje Ubuntu 24.04 sunucuda (192.168.0.28) native çalışıyor (Docker'sız):
 - **PostgreSQL 16** — port 5432 (bist_admin/bist_secure_2026/bist_trading)
-- **digibist-backend** (uvicorn nohup) — FastAPI + uvicorn 4 workers, port 8000
+- **digibist-backend** — systemd servisi (`digibist-backend.service`), FastAPI + uvicorn 4 workers, port 8000
 - **Nginx** — React build serve, port 80
 - **Filament Admin** — port 8001 (ayrı Laravel)
-- **Versiyon**: v8.05 (sunucuya v8.06 özellikleri deployed ama versiyon henuz bump edilmedi)
+- **Versiyon**: v8.07.00 (RSI Divergence + Kelly DrillDown deployed ama versiyon henüz bump edilmedi)
+
+## ⚠️ KRİTİK: Backend Yönetimi
+- Backend `digibist-backend.service` systemd servisi ile yönetilir
+- **Restart**: `systemctl restart digibist-backend`
+- **Status**: `systemctl status digibist-backend`
+- **ASLA** `fuser -k` veya `pkill` kullanma — systemd otomatik yeniden başlatır ve çakışma yaratır
 
 ## Son Yapılan İşler
+
+### v8.08 — RSI Divergence + Kelly DrillDown + Bug Fix'ler (24 Şubat 2026)
+1. **RSI Bullish/Bearish Divergence Algılama (Backend)**
+   - `backend/main.py` — `/api/ai-chart-data/{symbol}` endpoint'ine divergence algoritması eklendi
+   - Swing low/high bulma (lookback=5), dedup fonksiyonu (3 bar yakınlığı birleştirir)
+   - Bullish: Fiyat düşük dip + RSI yüksek dip = yükseliş sinyali
+   - Bearish: Fiyat yüksek tepe + RSI düşük tepe = düşüş sinyali
+   - min_distance=5 bar zorunlu mesafe
+   - API response'a `bullishDiv`/`bearishDiv` flag + `divergences` array eklendi
+2. **RSI Divergence Görselleştirme (Frontend — 3 iterasyon)**
+   - `AnalysisChartModal.js` — useMemo ile divergence noktaları hesaplanır
+   - Büyük etiketli daireler: Yeşil (yükseliş) / Kırmızı (düşüş) + glow efekt
+   - SVG text label: "YÜKSELİŞ" / "DÜŞÜŞ"
+   - Bağlantı dashed çizgiler (connectNulls)
+   - Badge: "🟢 X Yükseliş Sinyali" / "🔴 X Düşüş Sinyali"
+   - Eğitici kutu + detaylı sinyal kartları (fiyat/RSI grid, % değişim, Türkçe yorum)
+3. **React Error #310 Fix**
+   - `useMemo` hook `if (!isOpen) return null` early return'dan SONRA idi → hook sayısı değişiyordu
+   - Çözüm: `useMemo`'yu early return ÖNCESİNE taşıdı → sabit hook sayısı
+4. **Login Dropdown z-index Fix**
+   - `Navbar.js` — `<nav>` elementine `relative z-10` eklendi
+   - Login dropdown LiveTicker'ın üzerinde render ediliyor
+5. **Kelly Criterion DrillDown Raporu**
+   - `DrillDownModal.js` — Yeni `kelly` tipi eklendi (KellyDetail component)
+   - DashboardPage: Kelly kutusu onClick → Investopedia yerine DrillDown modal açılır
+   - İçerik: Pozisyon özeti, strateji istatistikleri, Kelly formülü hesaplama, gauge skalası, risk limitleri
+
+### v8.07 — Fırsat Bildirim Sistemi (24 Şubat 2026)
+- OpportunityScanner: STRONG_BUY/SELL, RSI_OVERSOLD/OVERBOUGHT, MACD_CROSS, BIG_MOVE, VOLUME_SPIKE, BOLLINGER
+- 30dk cooldown, max 200 alert in-memory
+- Frontend: NotificationBell + useNotifications hook
 
 ### v8.06 — Interval Butonları + BIST100 Endeks + Sidebar Filtre + Sticky Header + Fiyat Değişim (24 Şubat 2026)
 1. **Grafik Interval Butonları (1DK, 5DK, 1Saat, 3S, 1Hafta)**
@@ -140,5 +161,5 @@ ssh root@192.168.0.28 "chmod -R 755 /opt/digibist/frontend/build/"
 - **CPU**: Intel i5-650 @ 3.20GHz (4 core)
 - **RAM**: 7.7GB
 - **Backend venv**: `/opt/digibist/backend/venv/bin/python`
-- **Backend restart**: `fuser -k 8000/tcp; sleep 2; cd /opt/digibist/backend && venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 &`
+- **Backend restart**: `systemctl restart digibist-backend` (systemd servisi)\n- **Backend status**: `systemctl status digibist-backend`
 - **Frontend build**: `cd frontend && DISABLE_ESLINT_PLUGIN=true npm run build`

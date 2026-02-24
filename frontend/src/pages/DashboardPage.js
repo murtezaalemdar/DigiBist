@@ -590,7 +590,7 @@ const DashboardPage = ({
                   {data.kelly_fraction != null && (
                     <div
                       className="bg-black/30 rounded-xl p-3 cursor-pointer hover:bg-black/50 transition-all group/kelly relative"
-                      onClick={(e) => { e.stopPropagation(); window.open('https://www.investopedia.com/articles/trading/04/091504.asp', '_blank'); }}
+                      onClick={(e) => { e.stopPropagation(); setDrillDown({ open: true, type: 'kelly' }); }}
                     >
                       <div className="absolute top-2 right-2 flex items-center gap-1 text-[9px] text-blue-400 opacity-0 group-hover/kelly:opacity-100 transition-opacity">
                         <ExternalLink size={10} /> Kaynak

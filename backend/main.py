@@ -420,6 +420,82 @@ async def get_chart_data(symbol: str, period: str = "6mo", interval: str = "1d")
 
     # İntraday ise tarih+saat, günlük ise sadece tarih formatı
     is_intraday = interval in ("1m", "5m", "15m", "60m", "1h")
+    _date_fmt = "%Y-%m-%d %H:%M" if is_intraday else "%Y-%m-%d"
+
+    # ── RSI Divergence (Uyumsuzluk) Tespiti ──
+    divergences = []
+    _div_dates = {"bullish": set(), "bearish": set()}
+
+    if len(df) >= 20:
+        _cl = df['Close'].values.astype(float)
+        _rs = df['RSI'].values.astype(float)
+        _dt = df.index
+        _n  = len(df)
+        _lb = 5  # swing tespiti pencere boyutu
+
+        # Swing low / high tespiti
+        _lows, _highs = [], []
+        for i in range(_lb, _n - 2):
+            left  = _cl[i - _lb:i]
+            right = _cl[i + 1:min(_n, i + _lb + 1)]
+            if len(right) > 0:
+                if _cl[i] <= float(np.min(left)) and _cl[i] <= float(np.min(right)):
+                    _lows.append(i)
+                if _cl[i] >= float(np.max(left)) and _cl[i] >= float(np.max(right)):
+                    _highs.append(i)
+
+        # Yakın swing noktalarını birleştir (3 bar içinde en uç olanı tut)
+        def _dedup(arr, vals, pick_min=True):
+            if not arr:
+                return arr
+            res = [arr[0]]
+            for s in arr[1:]:
+                if s - res[-1] < 3:
+                    if (pick_min and vals[s] < vals[res[-1]]) or \
+                       (not pick_min and vals[s] > vals[res[-1]]):
+                        res[-1] = s
+                else:
+                    res.append(s)
+            return res
+
+        _lows  = _dedup(_lows,  _cl, pick_min=True)
+        _highs = _dedup(_highs, _cl, pick_min=False)
+
+        # Bullish Divergence: Fiyat düşen dip → RSI yükselen dip
+        for k in range(1, len(_lows)):
+            i1, i2 = _lows[k - 1], _lows[k]
+            if i2 - i1 < 5:
+                continue
+            if _cl[i2] < _cl[i1] and _rs[i2] > _rs[i1]:
+                d1 = _dt[i1].strftime(_date_fmt)
+                d2 = _dt[i2].strftime(_date_fmt)
+                divergences.append({
+                    "type": "bullish", "date": d2,
+                    "price": round(float(_cl[i2]), 2),
+                    "rsi": round(float(_rs[i2]), 2),
+                    "prev_date": d1,
+                    "prev_price": round(float(_cl[i1]), 2),
+                    "prev_rsi": round(float(_rs[i1]), 2),
+                })
+                _div_dates["bullish"].update([d1, d2])
+
+        # Bearish Divergence: Fiyat yükselen tepe → RSI düşen tepe
+        for k in range(1, len(_highs)):
+            i1, i2 = _highs[k - 1], _highs[k]
+            if i2 - i1 < 5:
+                continue
+            if _cl[i2] > _cl[i1] and _rs[i2] < _rs[i1]:
+                d1 = _dt[i1].strftime(_date_fmt)
+                d2 = _dt[i2].strftime(_date_fmt)
+                divergences.append({
+                    "type": "bearish", "date": d2,
+                    "price": round(float(_cl[i2]), 2),
+                    "rsi": round(float(_rs[i2]), 2),
+                    "prev_date": d1,
+                    "prev_price": round(float(_cl[i1]), 2),
+                    "prev_rsi": round(float(_rs[i1]), 2),
+                })
+                _div_dates["bearish"].update([d1, d2])
 
     # JSON serileştir
     records = []
@@ -445,6 +521,8 @@ async def get_chart_data(symbol: str, period: str = "6mo", interval: str = "1d")
             "bb_upper": round(float(row['BB_Upper']), 2),
             "bb_lower": round(float(row['BB_Lower']), 2),
             "volume_sma": round(float(row['Volume_SMA']), 0),
+            "bullishDiv": round(float(row['RSI']), 2) if date_str in _div_dates.get("bullish", set()) else None,
+            "bearishDiv": round(float(row['RSI']), 2) if date_str in _div_dates.get("bearish", set()) else None,
         })
 
     return {
@@ -453,6 +531,7 @@ async def get_chart_data(symbol: str, period: str = "6mo", interval: str = "1d")
         "interval": interval,
         "count": len(records),
         "data": records,
+        "divergences": divergences,
     }
 
 

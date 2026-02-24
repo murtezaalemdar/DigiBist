@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -62,6 +62,7 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
   const [period, setPeriod] = useState('6mo');
   const [interval, setChartInterval] = useState('1d');
   const [error, setError] = useState(null);
+  const [divergences, setDivergences] = useState([]);
 
   useEffect(() => {
     if (!isOpen || !symbol) return;
@@ -76,11 +77,28 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
           setChartData([]);
         } else {
           setChartData(d.data || []);
+          setDivergences(d.divergences || []);
         }
       })
       .catch(() => setError('Grafik verisi yüklenemedi.'))
       .finally(() => setLoading(false));
   }, [isOpen, symbol, period, interval]);
+
+  // RSI Divergence verisi — her divergence çifti için ayrı Line serisi oluştur
+  // (Hook'lar koşullu return'dan ÖNCE olmalı — React kuralı)
+  const rsiDivData = useMemo(() => {
+    if (!divergences.length || !chartData.length) return chartData;
+    return chartData.map(point => {
+      const extra = {};
+      divergences.forEach((div, i) => {
+        const key = `divLine${i}`;
+        if (point.date === div.prev_date) extra[key] = div.prev_rsi;
+        else if (point.date === div.date) extra[key] = div.rsi;
+        else extra[key] = null;
+      });
+      return { ...point, ...extra };
+    });
+  }, [chartData, divergences]);
 
   if (!isOpen) return null;
 
@@ -275,15 +293,29 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
                 </div>
               )}
 
-              {/* RSI + Fiyat */}
+              {/* RSI + Fiyat + Divergence */}
               {activeTab === 'rsi' && (
                 <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
                   <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
                     <Activity size={14} className="text-blue-500" />
                     RSI (Relative Strength Index) — Aşırı Alım / Aşırı Satım Bölgeleri
+                    {divergences.length > 0 && (
+                      <span className="ml-auto flex items-center gap-2">
+                        {divergences.filter(d => d.type === 'bullish').length > 0 && (
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/20 text-green-300 border border-green-500/30 flex items-center gap-1">
+                            <span>🟢</span> {divergences.filter(d => d.type === 'bullish').length} Yükseliş Sinyali
+                          </span>
+                        )}
+                        {divergences.filter(d => d.type === 'bearish').length > 0 && (
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1">
+                            <span>🔴</span> {divergences.filter(d => d.type === 'bearish').length} Düşüş Sinyali
+                          </span>
+                        )}
+                      </span>
+                    )}
                   </h4>
                   <ResponsiveContainer width="100%" height={350}>
-                    <ComposedChart data={chartData} margin={{ top: 5, right: 55, left: 15, bottom: 5 }}>
+                    <ComposedChart data={rsiDivData} margin={{ top: 20, right: 55, left: 15, bottom: 5 }}>
                       <defs>
                         <linearGradient id="rsiGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -304,8 +336,158 @@ const AnalysisChartModal = ({ isOpen, onClose, symbol, forecastData }) => {
 
                       <Area yAxisId="rsi" type="monotone" dataKey="rsi" stroke="#3b82f6" strokeWidth={2} fill="url(#rsiGrad)" name="RSI (14)" />
                       <Line yAxisId="price" type="monotone" dataKey="close" stroke="#f59e0b" strokeWidth={1.5} dot={false} strokeOpacity={0.6} name="Fiyat (₺)" />
+
+                      {/* Divergence bağlantı çizgileri — kalın ve belirgin */}
+                      {divergences.map((div, i) => (
+                        <Line
+                          key={`div-${i}`}
+                          yAxisId="rsi"
+                          type="linear"
+                          dataKey={`divLine${i}`}
+                          stroke={div.type === 'bullish' ? '#22c55e' : '#ef4444'}
+                          strokeWidth={3}
+                          strokeDasharray="8 4"
+                          connectNulls={true}
+                          dot={false}
+                          isAnimationActive={false}
+                          legendType="none"
+                        />
+                      ))}
+
+                      {/* Bullish Divergence işaretçileri — etiketli daire + ok */}
+                      {divergences.some(d => d.type === 'bullish') && (
+                        <Line
+                          yAxisId="rsi"
+                          dataKey="bullishDiv"
+                          stroke="transparent"
+                          strokeWidth={0}
+                          connectNulls={false}
+                          dot={(dotProps) => {
+                            const { cx, cy, value, index } = dotProps;
+                            if (value == null || cx == null || cy == null) return <g key={`bull-empty-${index}`} />;
+                            return (
+                              <g key={`bull-${index}`}>
+                                {/* Parlak halka */}
+                                <circle cx={cx} cy={cy} r={14} fill="#22c55e" fillOpacity={0.15} stroke="#22c55e" strokeWidth={2} />
+                                <circle cx={cx} cy={cy} r={8} fill="#22c55e" stroke="#16a34a" strokeWidth={1.5} />
+                                {/* Yukarı ok */}
+                                <text x={cx} y={cy + 4} textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">↑</text>
+                                {/* Etiket */}
+                                <rect x={cx - 28} y={cy - 34} width={56} height={16} rx={4} fill="#16a34a" fillOpacity={0.9} />
+                                <text x={cx} y={cy - 22} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">YÜKSELİŞ</text>
+                              </g>
+                            );
+                          }}
+                          activeDot={false}
+                          isAnimationActive={false}
+                          legendType="none"
+                          name="Bullish Div"
+                        />
+                      )}
+
+                      {/* Bearish Divergence işaretçileri — etiketli daire + ok */}
+                      {divergences.some(d => d.type === 'bearish') && (
+                        <Line
+                          yAxisId="rsi"
+                          dataKey="bearishDiv"
+                          stroke="transparent"
+                          strokeWidth={0}
+                          connectNulls={false}
+                          dot={(dotProps) => {
+                            const { cx, cy, value, index } = dotProps;
+                            if (value == null || cx == null || cy == null) return <g key={`bear-empty-${index}`} />;
+                            return (
+                              <g key={`bear-${index}`}>
+                                {/* Parlak halka */}
+                                <circle cx={cx} cy={cy} r={14} fill="#ef4444" fillOpacity={0.15} stroke="#ef4444" strokeWidth={2} />
+                                <circle cx={cx} cy={cy} r={8} fill="#ef4444" stroke="#dc2626" strokeWidth={1.5} />
+                                {/* Aşağı ok */}
+                                <text x={cx} y={cy + 4} textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">↓</text>
+                                {/* Etiket */}
+                                <rect x={cx - 22} y={cy + 18} width={44} height={16} rx={4} fill="#dc2626" fillOpacity={0.9} />
+                                <text x={cx} y={cy + 30} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">DÜŞÜŞ</text>
+                              </g>
+                            );
+                          }}
+                          activeDot={false}
+                          isAnimationActive={false}
+                          legendType="none"
+                          name="Bearish Div"
+                        />
+                      )}
                     </ComposedChart>
                   </ResponsiveContainer>
+
+                  {/* Divergence Bilgi Paneli — Türkçe, açıklayıcı */}
+                  {divergences.length > 0 && (
+                    <div className="mt-4 space-y-3">
+                      {/* Divergence Nedir? — açıklama kutusu */}
+                      <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-200">
+                        <strong className="text-indigo-300">📊 RSI Uyumsuzluğu (Divergence) Nedir?</strong>
+                        <p className="mt-1 text-slate-400 leading-relaxed">
+                          Fiyat ile RSI göstergesi arasındaki çelişkiyi ifade eder.
+                          <span className="text-green-300 font-bold"> Yükseliş sinyali:</span> Fiyat düşerken RSI yükseliyorsa, düşüş zayıflıyor demektir — dönüş gelebilir.
+                          <span className="text-red-300 font-bold"> Düşüş sinyali:</span> Fiyat yükselirken RSI düşüyorsa, yükseliş ivmesi kayboluyor — geri çekilme gelebilir.
+                        </p>
+                      </div>
+
+                      {/* Sinyal Kartları */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {divergences.slice(-4).reverse().map((div, i) => {
+                          const isBull = div.type === 'bullish';
+                          const priceDiff = ((div.price - div.prev_price) / div.prev_price * 100).toFixed(1);
+                          const rsiDiff = (div.rsi - div.prev_rsi).toFixed(1);
+                          return (
+                            <div key={i} className={`p-3 rounded-xl text-xs border-l-4 ${
+                              isBull
+                                ? 'bg-green-500/10 border-green-500 border-r border-t border-b border-r-green-500/20 border-t-green-500/20 border-b-green-500/20'
+                                : 'bg-red-500/10 border-red-500 border-r border-t border-b border-r-red-500/20 border-t-red-500/20 border-b-red-500/20'
+                            }`}>
+                              {/* Başlık */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className={`text-lg`}>{isBull ? '🟢' : '🔴'}</span>
+                                <div>
+                                  <div className={`font-extrabold text-sm ${isBull ? 'text-green-400' : 'text-red-400'}`}>
+                                    {isBull ? '↑ Yükseliş Sinyali' : '↓ Düşüş Sinyali'}
+                                  </div>
+                                  <div className="text-slate-500 text-[10px]">
+                                    {div.prev_date} → {div.date}
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Detaylar */}
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-black/20 rounded-lg p-2">
+                                  <div className="text-slate-500 text-[10px] mb-0.5">Fiyat Hareketi</div>
+                                  <div className={`font-bold ${isBull ? 'text-red-400' : 'text-green-400'}`}>
+                                    ₺{div.prev_price} → ₺{div.price}
+                                  </div>
+                                  <div className={`text-[10px] font-bold ${Number(priceDiff) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {Number(priceDiff) >= 0 ? '+' : ''}{priceDiff}%
+                                  </div>
+                                </div>
+                                <div className="bg-black/20 rounded-lg p-2">
+                                  <div className="text-slate-500 text-[10px] mb-0.5">RSI Hareketi</div>
+                                  <div className={`font-bold ${isBull ? 'text-green-400' : 'text-red-400'}`}>
+                                    {div.prev_rsi} → {div.rsi}
+                                  </div>
+                                  <div className={`text-[10px] font-bold ${Number(rsiDiff) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {Number(rsiDiff) >= 0 ? '↑ +' : '↓ '}{rsiDiff}
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Yorum */}
+                              <div className={`mt-2 text-[11px] leading-relaxed ${isBull ? 'text-green-300/80' : 'text-red-300/80'}`}>
+                                {isBull
+                                  ? '💡 Fiyat dip yaparken RSI yükseldi — satış baskısı zayıflıyor, potansiyel dönüş.'
+                                  : '⚠️ Fiyat zirve yaparken RSI düştü — alım gücü azalıyor, geri çekilme riski.'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* RSI Yorumu */}
                   {lastPoint && (
