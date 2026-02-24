@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BrainCircuit,
   TrendingUp,
@@ -16,7 +16,10 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { getRiskColor } from '../utils/helpers';
+import { API_BASE } from '../config';
 import AnalysisChartModal from '../components/AnalysisChartModal';
+import DrillDownModal from '../components/DrillDownModal';
+import FeaturePopup from '../components/FeaturePopup';
 
 const DashboardPage = ({
   selectedSymbol,
@@ -28,9 +31,39 @@ const DashboardPage = ({
   displayPrice,
   wsConnected,
   livePrice,
+  priceProvider,
+  lastPriceUpdate,
+  updateInterval,
 }) => {
   const [chartModalOpen, setChartModalOpen] = useState(false);
+  const [drillDown, setDrillDown] = useState({ open: false, type: null });
+  const [featurePopup, setFeaturePopup] = useState({ open: false, name: null });
+  const [countdown, setCountdown] = useState(60);
+  const [kapNews, setKapNews] = useState(null);
+  const [kapLoading, setKapLoading] = useState(false);
   const activeSignal = data?.risk_signal || data?.signal;
+
+  // KAP haberleri fetch
+  useEffect(() => {
+    if (!selectedSymbol) return;
+    setKapLoading(true);
+    fetch(`${API_BASE}/api/kap-news/${selectedSymbol}`)
+      .then(r => r.json())
+      .then(d => { setKapNews(d); setKapLoading(false); })
+      .catch(() => setKapLoading(false));
+  }, [selectedSymbol]);
+
+  // Geri sayım: gerçek güncelleme aralığına göre
+  useEffect(() => {
+    if (lastPriceUpdate) setCountdown(updateInterval || 10);
+  }, [lastPriceUpdate, updateInterval]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const riskColors = getRiskColor(activeSignal);
 
   return (
@@ -54,19 +87,19 @@ const DashboardPage = ({
 
         <div className="flex items-center gap-3">
           <button
-            onClick={handleRefresh}
+            onClick={() => handleRefresh(false)}
             disabled={isRefreshing || loading}
             className="bg-white/5 border border-white/10 p-3 rounded-2xl hover:bg-white/10 transition-all text-slate-400 hover:text-white"
           >
             <RefreshCw size={20} className={isRefreshing ? 'animate-spin text-blue-500' : ''} />
           </button>
           <button
-            onClick={handleRefresh}
+            onClick={() => handleRefresh(true)}
             disabled={isRefreshing || loading}
             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 rounded-2xl font-bold shadow-lg shadow-blue-900/40 transition-all flex items-center gap-2"
           >
             <Activity size={18} className={loading ? 'animate-pulse' : ''} />{' '}
-            {loading ? 'Analiz Ediliyor...' : 'Teknik Analiz Al'}
+            {loading ? 'Analiz Ediliyor...' : 'Teknik Analiz AI'}
           </button>
         </div>
       </div>
@@ -83,6 +116,19 @@ const DashboardPage = ({
           <p className="mt-6 text-slate-400 animate-pulse font-medium tracking-wide">
             Yapay Zeka Modeli Eğitiliyor...
           </p>
+          <p className="mt-2 text-slate-600 text-xs">İlk analiz ~20 saniye sürebilir</p>
+        </div>
+      ) : data?.error ? (
+        <div className="h-[300px] sm:h-[400px] md:h-[500px] flex flex-col items-center justify-center bg-white/[0.02] border border-red-500/20 rounded-2xl sm:rounded-[2rem]">
+          <AlertTriangle size={48} className="text-red-400 mb-4" />
+          <p className="text-red-400 font-medium mb-2">Analiz Başarısız</p>
+          <p className="text-slate-500 text-sm max-w-md text-center">{data.error}</p>
+          <button
+            onClick={handleRefresh}
+            className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-bold text-sm transition-all"
+          >
+            Tekrar Dene
+          </button>
         </div>
       ) : (
         <div className="space-y-6">
@@ -166,8 +212,15 @@ const DashboardPage = ({
                 Piyasa Fiyatı
               </p>
               {wsConnected && livePrice?.price > 0 && (
-                <div className="flex items-center gap-1.5 text-[10px] text-green-400 font-bold mb-2">
-                  <Wifi size={10} className="animate-pulse" /> CANLI
+                <div className="flex items-center gap-2 text-[10px] font-bold mb-2">
+                  <span className="flex items-center gap-1 text-green-400">
+                    <Wifi size={10} className="animate-pulse" /> CANLI
+                  </span>
+                  <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1 rounded text-[10px] font-mono font-bold ${
+                    countdown <= 2 ? 'bg-green-500/30 text-green-400 animate-pulse' : 'bg-white/10 text-slate-400'
+                  }`}>
+                    {countdown}s
+                  </span>
                 </div>
               )}
               <h3 className="text-3xl sm:text-4xl md:text-5xl font-extrabold mb-4 italic font-mono tracking-tighter">
@@ -177,7 +230,9 @@ const DashboardPage = ({
                 <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded-lg font-bold">
                   GERÇEK VERİ
                 </span>
-                <span className="text-slate-500">Yahoo Finance</span>
+                <span className="text-slate-500">
+                  {priceProvider === 'tradingview' ? 'TradingView' : priceProvider === 'yahoo_spark' ? 'Yahoo Finance' : priceProvider === 'bigpara' ? 'Bigpara' : 'Yahoo Finance'}
+                </span>
               </div>
             </div>
 
@@ -288,11 +343,14 @@ const DashboardPage = ({
                 <span>Düşük</span><span>Orta</span><span>Yüksek</span>
               </div>
 
-              {/* Detay metrikleri */}
+              {/* Detay metrikleri — tıklanabilir */}
               <div className="space-y-2.5 text-[11px]">
                 {data.directional_accuracy != null && (
-                  <div className="flex justify-between text-slate-400" title="Modelin fiyat yönünü (yukarı/aşağı) doğru tahmin etme oranı. %60 üzeri iyi sayılır.">
-                    <span className="flex items-center gap-1 cursor-help">📈 Yönsel Doğruluk <Info size={10} className="text-slate-600" /></span>
+                  <div
+                    className="flex justify-between text-slate-400 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-all group"
+                    onClick={() => setDrillDown({ open: true, type: 'directional' })}
+                  >
+                    <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">📈 Yönsel Doğruluk <Info size={10} className="text-slate-600" /></span>
                     <span className={`font-bold ${data.directional_accuracy >= 0.6 ? 'text-green-400' : data.directional_accuracy >= 0.5 ? 'text-yellow-400' : 'text-red-400'}`}>
                       %{Math.round(data.directional_accuracy * 100)}
                       <span className="text-slate-600 font-normal ml-1">
@@ -302,8 +360,11 @@ const DashboardPage = ({
                   </div>
                 )}
                 {data.cv_r2 != null && (
-                  <div className="flex justify-between text-slate-400" title="Cross-Validation R² skoru. 1'e yakınsa model çok iyi, 0'a yakınsa zayıf, negatifse rastgeleden kötü.">
-                    <span className="flex items-center gap-1 cursor-help">🧪 CV R² Skoru <Info size={10} className="text-slate-600" /></span>
+                  <div
+                    className="flex justify-between text-slate-400 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-all group"
+                    onClick={() => setDrillDown({ open: true, type: 'cv_r2' })}
+                  >
+                    <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">🧪 CV R² Skoru <Info size={10} className="text-slate-600" /></span>
                     <span className={`font-bold ${data.cv_r2 >= 0.5 ? 'text-green-400' : data.cv_r2 >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
                       {data.cv_r2.toFixed(4)}
                       <span className="text-slate-600 font-normal ml-1">
@@ -313,8 +374,11 @@ const DashboardPage = ({
                   </div>
                 )}
                 {data.rsi != null && (
-                  <div className="flex justify-between text-slate-400" title="RSI (Relative Strength Index): 70 üzeri aşırı alım (düşüş riski), 30 altı aşırı satım (yükseliş fırsatı).">
-                    <span className="flex items-center gap-1 cursor-help">📊 RSI (14) <Info size={10} className="text-slate-600" /></span>
+                  <div
+                    className="flex justify-between text-slate-400 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-all group"
+                    onClick={() => setDrillDown({ open: true, type: 'rsi' })}
+                  >
+                    <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">📊 RSI (14) <Info size={10} className="text-slate-600" /></span>
                     <span className={`font-bold ${data.rsi > 70 ? 'text-red-400' : data.rsi < 30 ? 'text-green-400' : 'text-slate-300'}`}>
                       {data.rsi}
                       <span className="text-slate-600 font-normal ml-1">
@@ -324,14 +388,20 @@ const DashboardPage = ({
                   </div>
                 )}
                 {data.features_used != null && (
-                  <div className="flex justify-between text-slate-400" title="Modelin karar vermek için kullandığı teknik gösterge sayısı. Ne kadar çoksa o kadar kapsamlı analiz.">
-                    <span className="flex items-center gap-1 cursor-help">🔧 Kullanılan Gösterge <Info size={10} className="text-slate-600" /></span>
+                  <div
+                    className="flex justify-between text-slate-400 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-all group"
+                    onClick={() => setDrillDown({ open: true, type: 'features' })}
+                  >
+                    <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">🔧 Kullanılan Gösterge <Info size={10} className="text-slate-600" /></span>
                     <span className="font-bold text-slate-300">{data.features_used} indikatör</span>
                   </div>
                 )}
                 {data.training_samples != null && (
-                  <div className="flex justify-between text-slate-400" title="Modelin eğitildiği geçmiş işlem günü sayısı. Daha fazla veri genellikle daha güvenilir sonuç verir.">
-                    <span className="flex items-center gap-1 cursor-help">📅 Eğitim Verisi <Info size={10} className="text-slate-600" /></span>
+                  <div
+                    className="flex justify-between text-slate-400 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 -mx-2 transition-all group"
+                    onClick={() => setDrillDown({ open: true, type: 'training' })}
+                  >
+                    <span className="flex items-center gap-1 group-hover:text-blue-400 transition-colors">📅 Eğitim Verisi <Info size={10} className="text-slate-600" /></span>
                     <span className="font-bold text-slate-300">{data.training_samples} işlem günü</span>
                   </div>
                 )}
@@ -510,7 +580,13 @@ const DashboardPage = ({
                 <div className="mt-4 pt-3 border-t border-white/5 space-y-3">
                   {/* Kelly Criterion */}
                   {data.kelly_fraction != null && (
-                    <div className="bg-black/30 rounded-xl p-3">
+                    <div
+                      className="bg-black/30 rounded-xl p-3 cursor-pointer hover:bg-black/50 transition-all group/kelly relative"
+                      onClick={(e) => { e.stopPropagation(); window.open('https://www.investopedia.com/articles/trading/04/091504.asp', '_blank'); }}
+                    >
+                      <div className="absolute top-2 right-2 flex items-center gap-1 text-[9px] text-blue-400 opacity-0 group-hover/kelly:opacity-100 transition-opacity">
+                        <ExternalLink size={10} /> Kaynak
+                      </div>
                       <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 flex items-center gap-1">
                         🎰 Kelly Criterion Pozisyon Önerisi
                         <Info size={10} className="text-slate-600 cursor-help" title="Matematiksel optimal pozisyon büyüklüğü. Half-Kelly (yarım) kullanılır — daha muhafazakâr." />
@@ -537,6 +613,9 @@ const DashboardPage = ({
                           <span>Ort. Kayıp: <strong className="text-red-400">%{(data.avg_loss * 100).toFixed(2)}</strong></span>
                         </div>
                       )}
+                      <div className="flex items-center gap-1 mt-2 text-[9px] text-blue-400/60 group-hover/kelly:text-blue-400 transition-colors">
+                        <ExternalLink size={9} /> Kelly Criterion Nedir? — Investopedia
+                      </div>
                     </div>
                   )}
 
@@ -548,9 +627,13 @@ const DashboardPage = ({
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {data.top_features.map((f, i) => (
-                          <span key={f} className={`text-[9px] px-2 py-0.5 rounded-lg ${
-                            i < 3 ? 'bg-blue-500/20 text-blue-400 font-bold' : 'bg-white/5 text-slate-500'
-                          }`}>
+                          <span
+                            key={f}
+                            onClick={(e) => { e.stopPropagation(); setFeaturePopup({ open: true, name: f }); }}
+                            className={`text-[9px] px-2 py-0.5 rounded-lg cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
+                              i < 3 ? 'bg-blue-500/20 text-blue-400 font-bold hover:bg-blue-500/30' : 'bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300'
+                            }`}
+                          >
                             {i + 1}. {f}
                           </span>
                         ))}
@@ -564,6 +647,81 @@ const DashboardPage = ({
                   )}
                 </div>
               )}
+
+              {/* KAP Bildirileri */}
+              <div className="mt-4 pt-3 border-t border-white/5">
+                <div className="bg-black/30 rounded-xl p-3 relative">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 flex items-center gap-1">
+                    📋 {selectedSymbol} — KAP Bildirileri
+                  </p>
+
+                  {/* Son KAP Haberi */}
+                  {kapLoading ? (
+                    <p className="text-[10px] text-slate-500 animate-pulse">KAP haberleri yükleniyor...</p>
+                  ) : kapNews?.news?.length > 0 ? (
+                    <a
+                      href={kapNews.news[0].link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-blue-500/10 hover:bg-blue-500/20 rounded-lg p-2 mb-2 transition-all group/newslink"
+                    >
+                      <p className="text-[10px] text-blue-300 font-semibold leading-snug group-hover/newslink:text-blue-200 transition-colors">
+                        {kapNews.news[0].title}
+                      </p>
+                      <p className="text-[9px] text-slate-500 mt-1">
+                        {kapNews.news[0].source} · {new Date(kapNews.news[0].date).toLocaleDateString('tr-TR', {day:'numeric',month:'short',year:'numeric'})}
+                      </p>
+                    </a>
+                  ) : (
+                    <p className="text-[10px] text-slate-400 leading-relaxed mb-2">
+                      {selectedSymbol} hissesine ait güncel KAP haberi bulunamadı.
+                    </p>
+                  )}
+
+                  {/* 2. ve 3. haber (varsa) */}
+                  {kapNews?.news?.length > 1 && (
+                    <div className="space-y-1 mb-2">
+                      {kapNews.news.slice(1, 3).map((n, idx) => (
+                        <a
+                          key={idx}
+                          href={n.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-1.5 text-[9px] text-slate-400 hover:text-blue-300 transition-colors"
+                        >
+                          <span className="text-blue-500 mt-0.5">▸</span>
+                          <span className="line-clamp-1">{n.title}</span>
+                          <span className="text-slate-600 whitespace-nowrap ml-auto">{n.source}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tıklanabilir kategori etiketleri */}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <a href={`https://www.kap.org.tr/tr/bildirim-sorgu`} target="_blank" rel="noopener noreferrer"
+                       className="text-[9px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-lg font-bold hover:bg-blue-500/40 hover:scale-105 transition-all inline-flex items-center gap-1 no-underline">
+                      Özel Durum Açıklamaları <ExternalLink size={8} />
+                    </a>
+                    <a href={`https://www.kap.org.tr/tr/bildirim-sorgu`} target="_blank" rel="noopener noreferrer"
+                       className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-lg font-bold hover:bg-purple-500/40 hover:scale-105 transition-all inline-flex items-center gap-1 no-underline">
+                      Finansal Tablolar <ExternalLink size={8} />
+                    </a>
+                    <a href={`https://www.kap.org.tr/tr/bildirim-sorgu`} target="_blank" rel="noopener noreferrer"
+                       className="text-[9px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-lg font-bold hover:bg-green-500/40 hover:scale-105 transition-all inline-flex items-center gap-1 no-underline">
+                      Genel Kurul <ExternalLink size={8} />
+                    </a>
+                    <a href={`https://www.kap.org.tr/tr/bildirim-sorgu`} target="_blank" rel="noopener noreferrer"
+                       className="text-[9px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-lg font-bold hover:bg-yellow-500/40 hover:scale-105 transition-all inline-flex items-center gap-1 no-underline">
+                      Yönetim Kurulu <ExternalLink size={8} />
+                    </a>
+                  </div>
+
+                  <div className="flex items-center gap-1 mt-2 text-[9px] text-blue-400/60">
+                    <ExternalLink size={9} /> Kaynak: Google News · kap.org.tr
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="bg-orange-500/5 border border-orange-500/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col justify-center">
@@ -599,6 +757,22 @@ const DashboardPage = ({
         onClose={() => setChartModalOpen(false)}
         symbol={selectedSymbol}
         forecastData={data}
+      />
+
+      {/* Drill-Down Detay Modalı */}
+      <DrillDownModal
+        isOpen={drillDown.open}
+        onClose={() => setDrillDown({ open: false, type: null })}
+        type={drillDown.type}
+        data={data}
+      />
+
+      {/* Feature Detay Popup */}
+      <FeaturePopup
+        isOpen={featurePopup.open}
+        onClose={() => setFeaturePopup({ open: false, name: null })}
+        featureName={featurePopup.name}
+        data={data}
       />
     </>
   );

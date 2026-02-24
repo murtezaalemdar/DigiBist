@@ -49,8 +49,12 @@ from app.core.database import (
     get_trade_stats,
     get_recent_orders_v2,
 )
+from app.core.live_price_provider import fetch_live_prices, get_provider_stats
 import asyncio
 import time
+import threading
+import xml.etree.ElementTree as ET
+import requests as sync_requests
 from datetime import timedelta, datetime, timezone
 import yfinance as yf
 import logging
@@ -61,20 +65,22 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="BIST AI ML Engine", version="2.0.0")
 
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # React frontend
-    "http://localhost:8001",   # Filament admin panel
+    "http://localhost:3000",   # React frontend (dev)
+    "http://localhost:8001",   # Filament admin panel (dev)
+    "http://192.168.0.28",     # Production frontend
+    "http://192.168.0.28:8000",# Production API direct
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Forecast cache TTL (saniye) — veriler PostgreSQL forecast_cache tablosunda
-CACHE_TTL = 3600  # 1 saat
+CACHE_TTL = 120  # 2 dakika — anlık veri odaklı platform
 
 # Gerçek zamanlı fiyat akışı — DB'den dinamik çekilecek
 _active_symbols_cache: list[str] = []
@@ -173,19 +179,26 @@ async def _run_auto_cycle(config: dict):
 # 1) AI TAHMİN ENDPOİNTİ (PostgreSQL Cache + Risk Engine)
 # ─────────────────────────────────────────────
 @app.get("/api/ai-forecast/{symbol}")
-async def get_forecast(symbol: str, notify: bool = False):
-    # PostgreSQL forecast_cache tablosundan oku
-    try:
-        cached_data = await get_cached_forecast(symbol, ttl_seconds=CACHE_TTL)
-        if cached_data is not None:
-            return cached_data
-    except Exception as exc:
-        logger.warning(f"Cache okunamadı ({symbol}): {exc}")
+async def get_forecast(symbol: str, notify: bool = False, force: bool = False):
+    # force=True ise cache'i atla, yeniden eğit
+    if not force:
+        # PostgreSQL forecast_cache tablosundan oku
+        try:
+            cached_data = await get_cached_forecast(symbol, ttl_seconds=CACHE_TTL)
+            if cached_data is not None:
+                return cached_data
+        except Exception as exc:
+            logger.warning(f"Cache okunamadı ({symbol}): {exc}")
+    else:
+        logger.info(f"Force refresh: {symbol} — cache atlanıyor")
 
     ticker = f"{symbol}.IS"
     ai = BISTAIModel(ticker)
+
+    # Model eğitimini thread pool'da çalıştır (async event loop'u bloklamaz)
+    loop = asyncio.get_event_loop()
     try:
-        result = ai.fetch_and_train()
+        result = await loop.run_in_executor(None, ai.fetch_and_train)
     except Exception as exc:
         logger.error(f"fetch_and_train HATASI ({symbol}): {exc}", exc_info=True)
         return {"error": f"Model eğitim hatası: {str(exc)}"}
@@ -380,6 +393,29 @@ async def evaluate_strategy(rsi: float, ai_prob: float, momentum: float):
 
 
 # ─────────────────────────────────────────────
+# 2.0a) FİYAT KAYNAĞI DURUMU (Provider Stats)
+# ─────────────────────────────────────────────
+@app.get("/api/price-provider/stats")
+async def price_provider_stats():
+    """Canlı fiyat kaynağı istatistikleri."""
+    stats = get_provider_stats()
+    return {
+        "active_provider": _last_provider,
+        "provider_switches": _provider_switches,
+        "providers": stats,
+    }
+
+
+# ─────────────────────────────────────────────
+# 2.1) HİSSE LİSTESİ (Frontend Ana Liste)
+# ─────────────────────────────────────────────
+@app.get("/api/stocks")
+async def stocks_list():
+    """Frontend sidebar için aktif hisse listesini döndür (Laravel yerine)."""
+    stocks = await get_stocks_for_trading()
+    return stocks
+
+
 # 2.1a) HİSSE LİSTESİ (İşlem Merkezi için)
 # ─────────────────────────────────────────────
 @app.get("/api/stocks/trading-list")
@@ -579,54 +615,79 @@ async def auto_trade_run_once(config: AutoTradeConfig):
 
 # ─────────────────────────────────────────────
 # 3) WEBSOCKET - GERÇEK ZAMANLI FİYAT AKIŞI
-#    Batch yfinance sorgusu ile optimize edildi
+#    TradingView (birincil) + Yahoo Spark (yedek) + yfinance (son çare)
 # ─────────────────────────────────────────────
+
+# Son kullanılan provider ve switch sayacı
+_last_provider: str = "none"
+_provider_switches: int = 0
+
 
 async def _fetch_batch_prices() -> dict[str, dict]:
     """
-    Tüm aktif hisseler için batch yfinance sorgusu yapar.
-    Önce bellekteki WS cache'e, yoksa toplu download'a bakar.
-    yfinance chunk limiti: ~30 sembol per batch.
+    Tüm aktif hisseler için canlı fiyat çeker.
+    Öncelik: TradingView Scanner → Yahoo Spark → yfinance (fallback)
     """
+    global _last_provider, _provider_switches
     watched = await get_watched_symbols()
     logger.info(f"Fiyat çekme başladı: {len(watched)} sembol")
     prices: dict[str, dict] = {}
 
-    # Önce bellekteki forecast cache'den al (DB'ye gitmeden hızlı)
-    symbols_to_fetch: list[str] = []
+    # ── Adım 1: Bellekteki forecast cache'den sinyal bilgisini al ──
+    cached_signals: dict[str, str] = {}
     for sym in watched:
         if sym in _ws_price_cache:
+            cached_signals[sym] = _ws_price_cache[sym].get("signal", "—")
+
+    # ── Adım 2: Canlı fiyatları çek (TradingView → Yahoo Spark) ──
+    loop = asyncio.get_event_loop()
+    try:
+        live_prices, provider = await loop.run_in_executor(
+            None, fetch_live_prices, watched
+        )
+    except Exception as e:
+        logger.error(f"Live price provider hatası: {e}")
+        live_prices, provider = {}, "none"
+
+    if provider != _last_provider:
+        _provider_switches += 1
+        logger.info(f"Fiyat kaynağı değişti: {_last_provider} → {provider}")
+        _last_provider = provider
+
+    # ── Adım 3: Fiyatları prices dict'e dönüştür ──
+    for sym in watched:
+        if sym in live_prices and live_prices[sym].get("price", 0) > 0:
+            lp = live_prices[sym]
+            prices[sym] = {
+                "price": lp["price"],
+                "signal": cached_signals.get(sym, "—"),
+                "change": lp.get("change", 0),
+            }
+        elif sym in _ws_price_cache and _ws_price_cache[sym].get("price", 0) > 0:
             prices[sym] = _ws_price_cache[sym]
         else:
-            symbols_to_fetch.append(sym)
+            prices[sym] = {"price": 0, "signal": "—", "change": 0}
 
-    if not symbols_to_fetch:
-        return prices
-
-    # yfinance batch sorgusu — çok fazla sembol olduğunda chunk'la
-    CHUNK_SIZE = 30
-    chunks = [symbols_to_fetch[i:i + CHUNK_SIZE] for i in range(0, len(symbols_to_fetch), CHUNK_SIZE)]
-
-    for chunk in chunks:
+    # ── Adım 4: Eksik semboller için yfinance fallback ──
+    missing = [s for s in watched if prices.get(s, {}).get("price", 0) == 0]
+    if missing and len(missing) <= 20:  # Çok fazlaysa yfinance'ı geç
+        logger.info(f"yfinance fallback: {len(missing)} eksik sembol")
         try:
-            tickers_str = " ".join(f"{s}.IS" for s in chunk)
-            loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(
-                None, lambda t=tickers_str: yf.download(t, period="5d", progress=False, threads=True)
-            )
-
+            from app.ml_engine.model import _yfinance_lock
+            tickers_str = " ".join(f"{s}.IS" for s in missing)
+            def _yf_download(t=tickers_str):
+                with _yfinance_lock:
+                    return yf.download(t, period="5d", progress=False, threads=True)
+            data = await loop.run_in_executor(None, _yf_download)
             if data is not None and not data.empty:
                 close_col = data.get("Close")
                 if close_col is not None and not close_col.empty:
                     last_row = close_col.iloc[-1]
-                    # Önceki gün (change hesabı)
                     prev_row = close_col.iloc[-2] if len(close_col) > 1 else None
-
-                    for sym in chunk:
+                    for sym in missing:
                         yahoo_sym = f"{sym}.IS"
                         try:
-                            if len(chunk) == 1:
-                                # Tek sembol: MultiIndex yok
+                            if len(missing) == 1:
                                 price = float(last_row.iloc[-1]) if not last_row.empty else 0
                                 prev_price = float(prev_row.iloc[-1]) if prev_row is not None and not prev_row.empty else 0
                             else:
@@ -635,29 +696,20 @@ async def _fetch_batch_prices() -> dict[str, dict]:
                             price = round(price, 2) if price and price > 0 else 0
                             change = round(((price - prev_price) / prev_price) * 100, 2) if prev_price > 0 and price > 0 else 0
                         except (KeyError, TypeError, ValueError, IndexError):
-                            price = 0
-                            change = 0
-                        entry = _ws_price_cache.get(sym, {})
-                        prices[sym] = {
-                            "price": price,
-                            "signal": entry.get("signal", "—"),
-                            "change": change,
-                        }
-                else:
-                    for sym in chunk:
-                        prices[sym] = {"price": 0, "signal": "—", "change": 0}
-            else:
-                for sym in chunk:
-                    prices[sym] = {"price": 0, "signal": "—", "change": 0}
+                            price, change = 0, 0
+                        if price > 0:
+                            prices[sym] = {
+                                "price": price,
+                                "signal": cached_signals.get(sym, "—"),
+                                "change": change,
+                            }
         except Exception as e:
-            logger.warning(f"Batch fiyat çekme hatası (chunk): {e}")
-            for sym in chunk:
-                prices[sym] = {"price": 0, "signal": "—", "change": 0}
+            logger.warning(f"yfinance fallback hatası: {e}")
 
     valid = sum(1 for v in prices.values() if v.get("price", 0) > 0)
-    logger.info(f"Fiyat çekme bitti: {valid}/{len(prices)} hissede geçerli fiyat")
+    logger.info(f"Fiyat çekme bitti: {valid}/{len(prices)} hisse (kaynak: {provider})")
 
-    # Fiyatları DB'ye de yaz (async, arka planda)
+    # Fiyatları DB'ye de yaz
     try:
         await bulk_update_stock_prices(prices)
         logger.info("DB fiyat sync tamamlandı")
@@ -677,9 +729,10 @@ async def websocket_market(websocket: WebSocket):
             await websocket.send_json({
                 "type": "MARKET_UPDATE",
                 "timestamp": time.time(),
-                "data": prices
+                "data": prices,
+                "provider": _last_provider,
             })
-            await asyncio.sleep(10)  # Her 10 saniyede güncelle
+            await asyncio.sleep(60)  # Her 60 saniyede güncelle
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
@@ -867,6 +920,86 @@ async def api_set_user_permissions(user_id: int, request: SetPermissionsRequest,
 
 
 # ─────────────────────────────────────────────
+# 5.5) KAP BİLDİRİMLERİ (Google News RSS proxy)
+# ─────────────────────────────────────────────
+_kap_news_cache: dict[str, dict] = {}  # symbol -> {ts, data}
+_KAP_NEWS_TTL = 600  # 10 dakika cache
+
+# BIST100 şirket isimleri (sembol → şirket adı)
+_COMPANY_NAMES = {
+    "ASELS": "ASELSAN", "THYAO": "Türk Hava Yolları", "GARAN": "Garanti BBVA",
+    "AKBNK": "Akbank", "EREGL": "Ereğli Demir Çelik", "SAHOL": "Sabancı Holding",
+    "KCHOL": "Koç Holding", "SISE": "Şişecam", "FROTO": "Ford Otosan",
+    "PGSUS": "Pegasus", "BIMAS": "BİM", "TUPRS": "Tüpraş",
+    "TCELL": "Turkcell", "HEKTS": "Hektaş", "TOASO": "Tofaş",
+    "ARCLK": "Arçelik", "VESTL": "Vestel", "PETKM": "Petkim",
+    "KOZAL": "Koza Altın", "KOZAA": "Koza Anadolu", "DOHOL": "Doğan Holding",
+    "TAVHL": "TAV Havalimanları", "AEFES": "Anadolu Efes", "EKGYO": "Emlak GYO",
+    "ISCTR": "İş Bankası", "YKBNK": "Yapı Kredi", "VAKBN": "Vakıfbank",
+    "HALKB": "Halkbank", "TTKOM": "Türk Telekom", "ENKAI": "Enka İnşaat",
+    "TKFEN": "Tekfen", "MGROS": "Migros", "SOKM": "Şok Market",
+    "SKBNK": "Şekerbank", "TSKB": "TSKB", "ALBRK": "Albaraka Türk",
+    "AKSA": "Aksa Akrilik", "AKGRT": "Aksigorta", "KLRHO": "Kiler Holding",
+}
+
+
+def _fetch_kap_news_sync(symbol: str, company_name: str | None = None) -> list[dict]:
+    """Google News RSS üzerinden hisse KAP haberlerini çek."""
+    name = company_name or _COMPANY_NAMES.get(symbol, symbol)
+    results = []
+    try:
+        # KAP + şirket adı ile arama
+        url = f"https://news.google.com/rss/search?q={name}+KAP&hl=tr&gl=TR&ceid=TR:tr"
+        r = sync_requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if r.status_code == 200:
+            root = ET.fromstring(r.text)
+            for item in root.findall(".//item")[:10]:
+                title = item.find("title").text if item.find("title") is not None else ""
+                link = item.find("link").text if item.find("link") is not None else ""
+                pub_date = item.find("pubDate").text if item.find("pubDate") is not None else ""
+                source = item.find("source").text if item.find("source") is not None else ""
+                results.append({
+                    "title": title,
+                    "link": link,
+                    "date": pub_date,
+                    "source": source,
+                })
+    except Exception as e:
+        logger.warning(f"KAP haber çekme hatası ({symbol}): {e}")
+    return results
+
+
+@app.get("/api/kap-news/{symbol}")
+async def get_kap_news(symbol: str):
+    """Hisse için KAP/borsa haberleri (Google News RSS)."""
+    symbol = symbol.upper().strip().replace(".IS", "")
+    now = time.time()
+
+    # Cache kontrolü
+    cached = _kap_news_cache.get(symbol)
+    if cached and (now - cached["ts"]) < _KAP_NEWS_TTL:
+        return cached["data"]
+
+    # Senkron çağrı thread pool'da çalıştır
+    loop = asyncio.get_event_loop()
+    news = await loop.run_in_executor(None, _fetch_kap_news_sync, symbol, _COMPANY_NAMES.get(symbol))
+
+    kap_url = "https://www.kap.org.tr/tr/sirket-bilgileri/ozet/" + symbol
+    result = {
+        "symbol": symbol,
+        "company": _COMPANY_NAMES.get(symbol, symbol),
+        "news": news,
+        "kap_url": kap_url,
+        "kap_bildirim_sorgu": "https://www.kap.org.tr/tr/bildirim-sorgu",
+        "source": "Google News",
+        "cached": False,
+    }
+
+    _kap_news_cache[symbol] = {"ts": now, "data": result}
+    return result
+
+
+# ─────────────────────────────────────────────
 # 6) SAĞLIK KONTROLÜ (PostgreSQL bağlantı durumu dahil)
 # ─────────────────────────────────────────────
 @app.get("/")
@@ -914,6 +1047,9 @@ async def startup_initialize_broker():
     """Uygulama başlangıcında varsayılan broker'ı aktifle."""
     await broker_manager.initialize_default()
     logger.info("Broker Manager başlatıldı (Paper Trading varsayılan).")
+
+
+# Cache pre-warming kaldırıldı — anlık veri odaklı platform, cache gereksiz
 
 
 @app.get("/api/broker/status")

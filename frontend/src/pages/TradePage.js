@@ -167,6 +167,7 @@ const TradePage = ({
   stocks = [],
   livePrices = {},
   brokerStatus = {},
+  setActivePage,
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState('manual'); // manual | auto
@@ -194,17 +195,26 @@ const TradePage = ({
     <div className="space-y-6">
       {/* Broker / Borsa Durum Bandı */}
       <div className="flex flex-wrap items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border ${
-          brokerStatus?.connected
-            ? 'bg-green-500/10 border-green-500/30 text-green-400'
-            : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-        }`}>
+        <button
+          onClick={() => setActivePage && setActivePage('settings')}
+          title="Broker ayarlarını değiştirmek için tıklayın"
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all hover:scale-105 hover:shadow-lg cursor-pointer ${
+            brokerStatus?.connected
+              ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
+              : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/20'
+          }`}
+        >
           <div className={`w-2 h-2 rounded-full ${brokerStatus?.connected ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`} />
           {brokerStatus?.broker_name || 'Paper Trading'}
-        </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400">
+          <ChevronDown size={12} className="opacity-50" />
+        </button>
+        <button
+          onClick={() => setActivePage && setActivePage('settings')}
+          title="Borsa değiştirmek için tıklayın"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400 transition-all hover:bg-blue-500/20 hover:scale-105 cursor-pointer"
+        >
           🏛️ {brokerStatus?.active_exchange || brokerStatus?.exchange || 'BIST'}
-        </div>
+        </button>
         {brokerStatus?.balance > 0 && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-400">
             💰 {Number(brokerStatus.balance).toLocaleString('tr-TR')} {brokerStatus?.currency || 'TRY'}
@@ -214,6 +224,14 @@ const TradePage = ({
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-500">
             Hesap: {brokerStatus.account_id}
           </div>
+        )}
+        {brokerStatus?.broker_type === 'paper' && (
+          <button
+            onClick={() => setActivePage && setActivePage('settings')}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-pointer"
+          >
+            <Info size={12} /> Gerçek broker bağla →
+          </button>
         )}
       </div>
 
@@ -322,6 +340,361 @@ const TradePage = ({
                 {strategyInfo[manualOrder.strategy_type || 'manual']?.desc}
               </p>
             </div>
+
+            {/* ── AI Kararı Strateji Paneli ── */}
+            {manualOrder.strategy_type === 'ai_only' && (
+              <div className="bg-gradient-to-r from-emerald-600/5 to-teal-600/5 border border-emerald-500/10 rounded-xl p-4 mb-6 animate-in fade-in">
+                <div className="text-xs font-bold text-emerald-400 mb-3 flex items-center gap-1.5">
+                  <Zap size={14} /> AI Karar Parametreleri
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Min. AI Güven Eşiği</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0.50"
+                        max="0.99"
+                        step="0.01"
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                        value={manualOrder.ai_min_confidence ?? 0.70}
+                        onChange={(e) => setManualOrder(p => ({ ...p, ai_min_confidence: Number(e.target.value) }))}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                        {((manualOrder.ai_min_confidence ?? 0.70) * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Sinyal Modu</label>
+                    <select
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      value={manualOrder.ai_signal_mode ?? 'balanced'}
+                      onChange={(e) => setManualOrder(p => ({ ...p, ai_signal_mode: e.target.value }))}
+                    >
+                      <option value="aggressive">🔥 Agresif — Düşük güven, yüksek işlem</option>
+                      <option value="balanced">⚖️ Dengeli — Orta güven, orta risk</option>
+                      <option value="conservative">🛡️ Muhafazakar — Yüksek güven, düşük risk</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">AI Modeli</label>
+                    <select
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      value={manualOrder.ai_model ?? 'ensemble'}
+                      onChange={(e) => setManualOrder(p => ({ ...p, ai_model: e.target.value }))}
+                    >
+                      <option value="ensemble">🧠 Ensemble (LightGBM + XGBoost + RF)</option>
+                      <option value="lightgbm">⚡ LightGBM — Hızlı</option>
+                      <option value="xgboost">🎯 XGBoost — Hassas</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block flex items-center gap-1">
+                      <AlertTriangle size={11} className="text-red-400" /> Oto Stop-Loss (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="20"
+                      step="0.5"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500/50"
+                      value={manualOrder.ai_stop_loss_pct ?? 3.0}
+                      onChange={(e) => setManualOrder(p => ({ ...p, ai_stop_loss_pct: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block flex items-center gap-1">
+                      <TrendingUp size={11} className="text-emerald-400" /> Oto Take-Profit (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      step="0.5"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      value={manualOrder.ai_take_profit_pct ?? 5.0}
+                      onChange={(e) => setManualOrder(p => ({ ...p, ai_take_profit_pct: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-2 text-[11px] text-slate-400 flex items-start gap-1.5">
+                  <Info size={12} className="text-emerald-400 mt-0.5 shrink-0" />
+                  <span>AI modeli seçili hisseyi analiz edecek ve güven eşiğini geçerse sinyal doğrultusunda emir önerecektir. Onay sizden alınır.</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── İndikatör Strateji Paneli ── */}
+            {manualOrder.strategy_type === 'indicator' && (
+              <div className="bg-gradient-to-r from-amber-600/5 to-orange-600/5 border border-amber-500/10 rounded-xl p-4 mb-6 animate-in fade-in">
+                <div className="text-xs font-bold text-amber-400 mb-3 flex items-center gap-1.5">
+                  <BarChart3 size={14} /> Teknik İndikatör Parametreleri
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">RSI Aşırı Satım</label>
+                    <input
+                      type="number"
+                      min="10"
+                      max="50"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      value={manualOrder.rsi_oversold ?? 30}
+                      onChange={(e) => setManualOrder(p => ({ ...p, rsi_oversold: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">RSI Aşırı Alım</label>
+                    <input
+                      type="number"
+                      min="50"
+                      max="90"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      value={manualOrder.rsi_overbought ?? 70}
+                      onChange={(e) => setManualOrder(p => ({ ...p, rsi_overbought: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">RSI Periyodu</label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="50"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                      value={manualOrder.rsi_period ?? 14}
+                      onChange={(e) => setManualOrder(p => ({ ...p, rsi_period: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 mb-3">
+                  <Toggle
+                    checked={manualOrder.use_macd ?? true}
+                    onChange={(v) => setManualOrder(p => ({ ...p, use_macd: v }))}
+                    label="MACD Sinyali"
+                  />
+                  <Toggle
+                    checked={manualOrder.use_bollinger ?? true}
+                    onChange={(v) => setManualOrder(p => ({ ...p, use_bollinger: v }))}
+                    label="Bollinger Bands"
+                  />
+                  <Toggle
+                    checked={manualOrder.use_volume ?? true}
+                    onChange={(v) => setManualOrder(p => ({ ...p, use_volume: v }))}
+                    label="Hacim Analizi"
+                  />
+                  <Toggle
+                    checked={manualOrder.use_ema ?? false}
+                    onChange={(v) => setManualOrder(p => ({ ...p, use_ema: v }))}
+                    label="EMA Kesişim"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block flex items-center gap-1">
+                      <AlertTriangle size={11} className="text-red-400" /> Stop-Loss (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="20"
+                      step="0.5"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500/50"
+                      value={manualOrder.ind_stop_loss_pct ?? 3.0}
+                      onChange={(e) => setManualOrder(p => ({ ...p, ind_stop_loss_pct: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block flex items-center gap-1">
+                      <TrendingUp size={11} className="text-emerald-400" /> Take-Profit (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      step="0.5"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      value={manualOrder.ind_take_profit_pct ?? 5.0}
+                      onChange={(e) => setManualOrder(p => ({ ...p, ind_take_profit_pct: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 bg-amber-500/5 border border-amber-500/10 rounded-lg p-2 text-[11px] text-slate-400 flex items-start gap-1.5">
+                  <Info size={12} className="text-amber-400 mt-0.5 shrink-0" />
+                  <span>Seçili indikatörler gerçek zamanlı analiz edecek, koşullar sağlandığında AL/SAT sinyali üretecektir.</span>
+                </div>
+              </div>
+            )}
+
+            {/* ── Hibrit (AI + İndikatör) Strateji Paneli ── */}
+            {manualOrder.strategy_type === 'hybrid' && (
+              <div className="bg-gradient-to-r from-purple-600/5 to-indigo-600/5 border border-purple-500/10 rounded-xl p-4 mb-6 animate-in fade-in">
+                <div className="text-xs font-bold text-purple-400 mb-3 flex items-center gap-1.5">
+                  <Target size={14} /> Hibrit Strateji Parametreleri (AI + İndikatör)
+                </div>
+
+                {/* AI Ağırlık Slideri */}
+                <div className="mb-4">
+                  <label className="text-xs text-slate-500 mb-2 block">AI / İndikatör Ağırlık Oranı</label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-emerald-400 font-bold w-16">AI %{manualOrder.hybrid_ai_weight ?? 60}</span>
+                    <input
+                      type="range"
+                      min="10"
+                      max="90"
+                      step="5"
+                      className="flex-1 h-2 rounded-full appearance-none bg-gradient-to-r from-emerald-600 to-amber-500 cursor-pointer accent-purple-500"
+                      value={manualOrder.hybrid_ai_weight ?? 60}
+                      onChange={(e) => setManualOrder(p => ({ ...p, hybrid_ai_weight: Number(e.target.value) }))}
+                    />
+                    <span className="text-xs text-amber-400 font-bold w-24">İndikatör %{100 - (manualOrder.hybrid_ai_weight ?? 60)}</span>
+                  </div>
+                </div>
+
+                {/* AI Ayarları */}
+                <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-3 mb-3">
+                  <div className="text-[11px] font-bold text-emerald-400 mb-2 flex items-center gap-1">
+                    <Zap size={11} /> AI Ayarları
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Min. AI Güveni</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0.50"
+                          max="0.99"
+                          step="0.01"
+                          className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                          value={manualOrder.hybrid_ai_confidence ?? 0.65}
+                          onChange={(e) => setManualOrder(p => ({ ...p, hybrid_ai_confidence: Number(e.target.value) }))}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                          {((manualOrder.hybrid_ai_confidence ?? 0.65) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Sinyal Modu</label>
+                      <select
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                        value={manualOrder.hybrid_signal_mode ?? 'balanced'}
+                        onChange={(e) => setManualOrder(p => ({ ...p, hybrid_signal_mode: e.target.value }))}
+                      >
+                        <option value="aggressive">🔥 Agresif</option>
+                        <option value="balanced">⚖️ Dengeli</option>
+                        <option value="conservative">🛡️ Muhafazakar</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">AI Modeli</label>
+                      <select
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                        value={manualOrder.hybrid_ai_model ?? 'ensemble'}
+                        onChange={(e) => setManualOrder(p => ({ ...p, hybrid_ai_model: e.target.value }))}
+                      >
+                        <option value="ensemble">🧠 Ensemble</option>
+                        <option value="lightgbm">⚡ LightGBM</option>
+                        <option value="xgboost">🎯 XGBoost</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* İndikatör Ayarları */}
+                <div className="bg-amber-500/5 border border-amber-500/10 rounded-lg p-3 mb-3">
+                  <div className="text-[11px] font-bold text-amber-400 mb-2 flex items-center gap-1">
+                    <BarChart3 size={11} /> İndikatör Ayarları
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-2">
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">RSI Aşırı Satım</label>
+                      <input
+                        type="number"
+                        min="10"
+                        max="50"
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                        value={manualOrder.hybrid_rsi_oversold ?? 30}
+                        onChange={(e) => setManualOrder(p => ({ ...p, hybrid_rsi_oversold: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">RSI Aşırı Alım</label>
+                      <input
+                        type="number"
+                        min="50"
+                        max="90"
+                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50"
+                        value={manualOrder.hybrid_rsi_overbought ?? 70}
+                        onChange={(e) => setManualOrder(p => ({ ...p, hybrid_rsi_overbought: Number(e.target.value) }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-4">
+                    <Toggle
+                      checked={manualOrder.hybrid_use_macd ?? true}
+                      onChange={(v) => setManualOrder(p => ({ ...p, hybrid_use_macd: v }))}
+                      label="MACD"
+                    />
+                    <Toggle
+                      checked={manualOrder.hybrid_use_bollinger ?? true}
+                      onChange={(v) => setManualOrder(p => ({ ...p, hybrid_use_bollinger: v }))}
+                      label="Bollinger"
+                    />
+                    <Toggle
+                      checked={manualOrder.hybrid_use_volume ?? true}
+                      onChange={(v) => setManualOrder(p => ({ ...p, hybrid_use_volume: v }))}
+                      label="Hacim"
+                    />
+                  </div>
+                </div>
+
+                {/* Risk Yönetimi */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block flex items-center gap-1">
+                      <AlertTriangle size={11} className="text-red-400" /> Oto Stop-Loss (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="20"
+                      step="0.5"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500/50"
+                      value={manualOrder.hybrid_stop_loss_pct ?? 3.0}
+                      onChange={(e) => setManualOrder(p => ({ ...p, hybrid_stop_loss_pct: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block flex items-center gap-1">
+                      <TrendingUp size={11} className="text-emerald-400" /> Oto Take-Profit (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      step="0.5"
+                      className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500/50"
+                      value={manualOrder.hybrid_take_profit_pct ?? 5.0}
+                      onChange={(e) => setManualOrder(p => ({ ...p, hybrid_take_profit_pct: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-purple-500/5 border border-purple-500/10 rounded-lg p-2 text-[11px] text-slate-400 flex items-start gap-1.5">
+                  <Info size={12} className="text-purple-400 mt-0.5 shrink-0" />
+                  <span>Hibrit mod: AI sinyali ve teknik indikatörler ağırlıklı olarak birleştirilir. Her iki kaynak da onaylarsa sinyal güçlenir.</span>
+                </div>
+              </div>
+            )}
 
             {/* ── Yön + Miktar + Mod ── */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">

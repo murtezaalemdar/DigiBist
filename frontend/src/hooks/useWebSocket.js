@@ -8,6 +8,10 @@ import { WS_BASE } from '../config';
 export default function useWebSocket() {
   const [livePrices, setLivePrices] = useState({});
   const [wsConnected, setWsConnected] = useState(false);
+  const [priceProvider, setPriceProvider] = useState('none');
+  const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
+  const [updateInterval, setUpdateInterval] = useState(60);
+  const lastUpdateRef = useRef(null);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
 
@@ -28,6 +32,14 @@ export default function useWebSocket() {
           const msg = JSON.parse(event.data);
           if (msg.type === 'MARKET_UPDATE') {
             setLivePrices(msg.data || {});
+            const now = Date.now();
+            if (lastUpdateRef.current) {
+              const diff = Math.round((now - lastUpdateRef.current) / 1000);
+              if (diff > 0 && diff < 120) setUpdateInterval(diff);
+            }
+            lastUpdateRef.current = now;
+            setLastPriceUpdate(now);
+            if (msg.provider) setPriceProvider(msg.provider);
           }
         } catch (e) {
           console.error('WS mesaj hatası:', e);
@@ -57,5 +69,5 @@ export default function useWebSocket() {
     };
   }, [connect]);
 
-  return { livePrices, wsConnected };
+  return { livePrices, wsConnected, priceProvider, lastPriceUpdate, updateInterval };
 }

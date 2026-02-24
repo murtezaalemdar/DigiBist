@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BrainCircuit, ShieldX } from 'lucide-react';
 
-import { API_BASE, ADMIN_API_BASE } from './config';
+import { API_BASE, ADMIN_API_BASE, APP_VERSION_FULL } from './config';
 import useWebSocket from './hooks/useWebSocket';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LiveTicker from './components/LiveTicker';
@@ -100,7 +100,7 @@ const AppContent = () => {
   });
 
   // WebSocket hook
-  const { livePrices, wsConnected } = useWebSocket();
+  const { livePrices, wsConnected, priceProvider, lastPriceUpdate, updateInterval } = useWebSocket();
 
   // Favorileri localStorage'a kaydet
   useEffect(() => { localStorage.setItem('bist_favorites', JSON.stringify(favorites)); }, [favorites]);
@@ -121,9 +121,9 @@ const AppContent = () => {
     return stocks.filter(s => s.symbol.toLowerCase().includes(q) || (s.name && s.name.toLowerCase().includes(q)));
   }, [stocks, searchQuery]);
 
-  // ─── Hisse listesi (Laravel) ───
+  // ─── Hisse listesi (FastAPI Backend) ───
   useEffect(() => {
-    fetch(`${ADMIN_API_BASE}/api/stocks`)
+    fetch(`${API_BASE}/api/stocks`)
       .then(res => res.json())
       .then(d => {
         setStocks(d);
@@ -132,15 +132,43 @@ const AppContent = () => {
       .catch(err => console.error('Hisse listesi yüklenemedi:', err));
   }, []);
 
-  // ─── AI Tahmin Çekme ───
-  const fetchForecast = (symbol) => {
+  // ─── AI Tahmin Çekme (retry + hata yönetimi) ───
+  const fetchForecast = useCallback((symbol, retryCount = 0) => {
     if (!symbol) return;
     setLoading(true);
     fetch(`${API_BASE}/api/ai-forecast/${symbol}`)
-      .then(res => res.json())
-      .then(d => { setData(d); setLoading(false); setIsRefreshing(false); })
-      .catch(err => { console.error(err); setLoading(false); setIsRefreshing(false); });
-  };
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(d => {
+        if (d.error) {
+          // Backend hata döndü — retry (max 2 kez)
+          console.warn(`Tahmin hatası (${symbol}): ${d.error}, deneme ${retryCount + 1}`);
+          if (retryCount < 2) {
+            setTimeout(() => fetchForecast(symbol, retryCount + 1), 3000 * (retryCount + 1));
+          } else {
+            setData({ error: d.error, symbol });
+            setLoading(false);
+            setIsRefreshing(false);
+          }
+        } else {
+          setData(d);
+          setLoading(false);
+          setIsRefreshing(false);
+        }
+      })
+      .catch(err => {
+        console.error('Tahmin çekme hatası:', err);
+        if (retryCount < 2) {
+          setTimeout(() => fetchForecast(symbol, retryCount + 1), 3000 * (retryCount + 1));
+        } else {
+          setData({ error: 'Sunucuya bağlanılamadı', symbol });
+          setLoading(false);
+          setIsRefreshing(false);
+        }
+      });
+  }, []);
 
   const loadTradingState = useCallback(() => {
     fetch(`${API_BASE}/api/auto-trade/status`)
@@ -230,9 +258,21 @@ const AppContent = () => {
       .finally(() => setTradeLoading(false));
   };
 
-  useEffect(() => { fetchForecast(selectedSymbol); }, [selectedSymbol]);
+  useEffect(() => { fetchForecast(selectedSymbol); }, [selectedSymbol, fetchForecast]);
 
-  const handleRefresh = () => { setIsRefreshing(true); fetchForecast(selectedSymbol); };
+  const handleRefresh = (forceRefresh = false) => {
+    setIsRefreshing(true);
+    if (forceRefresh) {
+      // Cache'i atla, yeniden analiz yap
+      setLoading(true);
+      fetch(`${API_BASE}/api/ai-forecast/${selectedSymbol}?force=true`)
+        .then(res => res.json())
+        .then(d => { setData(d); setLoading(false); setIsRefreshing(false); })
+        .catch(() => { setLoading(false); setIsRefreshing(false); });
+    } else {
+      fetchForecast(selectedSymbol);
+    }
+  };
 
   // Aktif hisse için canlı fiyat
   const livePrice = livePrices[selectedSymbol];
@@ -251,6 +291,7 @@ const AppContent = () => {
           activePage={activePage}
           setActivePage={setActivePage}
           wsConnected={wsConnected}
+          priceProvider={priceProvider}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
@@ -334,6 +375,7 @@ const AppContent = () => {
                   stocks={stocks}
                   livePrices={livePrices}
                   brokerStatus={brokerStatus}
+                  setActivePage={setActivePage}
                 />
               )}
 
@@ -354,21 +396,39 @@ const AppContent = () => {
                   displayPrice={displayPrice}
                   wsConnected={wsConnected}
                   livePrice={livePrice}
+                  priceProvider={priceProvider}
+                  lastPriceUpdate={lastPriceUpdate}
+                  updateInterval={updateInterval}
                 />
               )}
             </div>
           </div>
         </main>
 
-        <footer className="border-t border-white/5 mt-10 sm:mt-20 py-6 sm:py-10">
-          <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
-            <div className="flex items-center gap-2 text-slate-500 grayscale opacity-50">
-              <BrainCircuit size={20} />
-              <span className="text-sm font-medium">Powered by NextGen ML Engine & Yahoo Finance API</span>
+        <footer className="border-t border-white/5 mt-10 sm:mt-20 py-8 sm:py-12">
+          <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 flex flex-col items-center gap-5">
+            {/* İmza */}
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-slate-600 text-[10px] uppercase tracking-[0.3em] font-medium">
+                Designed by
+              </p>
+              <p className="text-slate-400 text-sm sm:text-base font-bold tracking-[0.2em] uppercase">
+                Murteza Alemdar
+              </p>
             </div>
-            <p className="text-slate-600 text-[10px] uppercase font-bold tracking-widest">
-              © 2026 BIST AI ANALYTICS • TÜM HAKLARI SAKLIDIR
-            </p>
+            {/* Versiyon */}
+            <div className="px-4 py-1.5 rounded-full border border-white/10 bg-white/[0.02]">
+              <span className="text-slate-500 text-[11px] font-mono font-bold tracking-wider">{APP_VERSION_FULL}</span>
+            </div>
+            {/* Alt bilgi */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 text-slate-700 text-[9px] uppercase tracking-widest">
+              <div className="flex items-center gap-1.5 opacity-50">
+                <BrainCircuit size={14} />
+                <span>Powered by NextGen ML Engine</span>
+              </div>
+              <span className="hidden sm:inline">•</span>
+              <span>© 2026 BIST AI Analytics</span>
+            </div>
           </div>
         </footer>
       </div>

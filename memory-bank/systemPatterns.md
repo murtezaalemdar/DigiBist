@@ -12,10 +12,22 @@
 
 ## Architectural Patterns
 
-- **Microservices via Docker Compose**: Her servis ayrı container, network üzerinden iletişim
-- **Event-driven realtime**: WebSocket ile gerçek zamanlı fiyat akışı
-- **Ensemble ML**: Birden fazla model ağırlıklı ortalama ile birleştirilir (CV R² bazlı)
+- **Native deployment on Ubuntu 24.04**: Backend uvicorn nohup, Nginx for frontend, PostgreSQL native
+- **Event-driven realtime**: WebSocket ile gerçek zamanlı fiyat akışı (60s interval)
+- **Ensemble ML**: 3 model (LightGBM + RandomForest + XGBoost) ağırlıklı ortalama (CV R² bazlı)
 - **Risk-first signal pipeline**: ML sinyal → Risk Engine filtre → Final sinyal
+- **Thread management**: CV serialized (n_jobs=1), her model kendi n_jobs=4 kullanır (oversubscription önlenir)
+- **Cache**: CACHE_TTL=120s, forecast sonuçları in-memory cache
+- **KAP News**: Google News RSS proxy (KAP API bloklu), 10dk cache, 35+ sembol eşleştirmesi
+- **Dual Y-axis Charts**: RSI/MACD/Hacim grafiklerinde sol eksen metrik, sağ eksen fiyat (₺)
+
+## Deploy Patterns
+
+- **⚠️ HER DEPLOY'DA VERSİYON ARTIR!** — `deploy.ps1` kullan veya `config.js` APP_VERSION'ı manuel artır
+- **deploy.ps1**: `.\deploy.ps1 -All -GitPush` (full deploy + git), `.\deploy.ps1 -Backend` (sadece backend)
+- **Backend restart**: `fuser -k 8000/tcp; sleep 2; cd /opt/digibist/backend && venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 &`
+- **Frontend deploy**: npm build → scp → `chmod -R 755 /opt/digibist/frontend/build/`
+- **Git**: `github.com/murtezaalemdar/DigiBist.git` branch `main`
 
 ## Design Patterns
 
@@ -27,15 +39,31 @@
 ## API Patterns
 
 - `GET /api/stocks/trading-list` — Hisse listesi (100 BIST100)
-- `GET /api/ai-forecast/{symbol}` — AI teknik analiz
+- `GET /api/ai-forecast/{symbol}` — AI teknik analiz + drill_down detayları
+- `GET /api/ai-chart-data/{symbol}` — Grafik verisi (OHLCV, SMA, RSI, MACD, Bollinger)
+- `GET /api/kap-news/{symbol}` — KAP haberleri (Google News RSS proxy, 10dk cache)
 - `POST /api/trade/manual` — Manuel emir
 - `POST /api/trade/auto/{action}` — Oto trade (start/stop/runOnce)
-- `WS /ws/market` — Gerçek zamanlı fiyat stream
+- `WS /ws/market` — Gerçek zamanlı fiyat stream (60s)
 - `GET /api/broker/status` — Aktif broker durumu
 - `GET /api/broker/list` — Tüm broker bilgileri (UI config alanlarıyla)
 - `POST /api/broker/switch` — Broker değiştir
 - `POST /api/broker/config` — Broker yapılandırması kaydet
-- `GET /admin/api/*` — Filament admin CRUD endpoints
+- `GET /api/price-provider/stats` — Canlı fiyat provider istatistikleri
+
+## AI Forecast Response drill_down Object
+
+```json
+{
+  "drill_down": {
+    "cv_fold_details": {"LightGBM": [r2_fold1, r2_fold2, ...], ...},
+    "feature_importances_full": [{"feature": "RSI_14", "importance": 0.23}, ...],
+    "fold_directional": [{"fold": 1, "correct": 8, "total": 10, "accuracy": 0.8, ...}, ...],
+    "training_date_range": {"start": "2025-02-24", "end": "2026-02-21"},
+    "rsi_history": [{"date": "2026-02-21", "value": 45.2}, ...]
+  }
+}
+```
 
 ## Broker Mimarisi
 

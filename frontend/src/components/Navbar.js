@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { APP_VERSION } from '../config';
 import {
   BrainCircuit,
   LayoutDashboard,
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
-const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConnected }) => {
+const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConnected, priceProvider }) => {
   const { user, logout, login, hasPermission } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
   const [loginUsername, setLoginUsername] = useState('admin');
@@ -70,16 +71,19 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
   return (
     <nav className="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-50">
       <div className="w-full px-3 sm:px-4 lg:px-6 xl:px-8 h-14 sm:h-16 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Logo — tıklayınca Dashboard'a git */}
+        <button
+          onClick={() => setActivePage('dashboard')}
+          className="flex items-center gap-2 sm:gap-3 shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+        >
           <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-1.5 sm:p-2 rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20">
             <BrainCircuit size={20} className="text-white sm:hidden" />
             <BrainCircuit size={24} className="text-white hidden sm:block" />
           </div>
           <span className="text-lg sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-            BIST AI <span className="text-blue-500 font-medium text-xs sm:text-sm ml-1">V8.0</span>
+            BIST AI <span className="text-blue-500 font-medium text-xs sm:text-sm ml-1">{APP_VERSION}</span>
           </span>
-        </div>
+        </button>
 
         {/* Desktop Tabs */}
         <div className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium text-slate-400">
@@ -111,6 +115,11 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
           >
             {wsConnected ? <Wifi size={12} className="animate-pulse" /> : <WifiOff size={12} />}
             {wsConnected ? 'CANLI' : 'BAĞLANILIYOR'}
+            {wsConnected && priceProvider && priceProvider !== 'none' && (
+              <span className="text-[10px] opacity-60 uppercase tracking-wider">
+                {priceProvider === 'tradingview' ? 'TV' : priceProvider === 'yahoo_spark' ? 'YF' : priceProvider}
+              </span>
+            )}
           </div>
 
           {/* WS indicator — mobile only (dot) */}

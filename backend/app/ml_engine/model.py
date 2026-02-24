@@ -2,21 +2,61 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from datetime import datetime, timedelta
 import logging
+import time as _time
+import threading
+import os
+
+# CPU çekirdek sayısı (tüm çekirdekleri kullan)
+_N_JOBS = int(os.cpu_count() or 2)
 
 logger = logging.getLogger(__name__)
 
-# XGBoost (opsiyonel — yoksa sadece GB + RF kullanılır)
+# Global yfinance kilidi — eşzamanlı download çakışmasını önler
+_yfinance_lock = threading.Lock()
+
+def _flatten_yf_columns(df):
+    """yfinance MultiIndex sütunlarını düzleştir (tüm versiyonlarda çalışır)."""
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.droplevel(level=1, axis=1)
+    # Duplicate sütun varsa kaldır
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+def _safe_yf_download(symbol, period="2y", interval="1d", max_retries=3, retry_delay=2):
+    """yfinance download with retry logic and concurrency protection."""
+    for attempt in range(max_retries):
+        try:
+            with _yfinance_lock:
+                data = yf.download(symbol, period=period, interval=interval, progress=False)
+            if data is not None and not data.empty:
+                return data
+            logger.warning(f"yfinance boş veri döndü ({symbol}), deneme {attempt+1}/{max_retries}")
+        except Exception as e:
+            logger.warning(f"yfinance hatası ({symbol}), deneme {attempt+1}/{max_retries}: {e}")
+        if attempt < max_retries - 1:
+            _time.sleep(retry_delay * (attempt + 1))
+    return pd.DataFrame()
+
+# LightGBM (GradientBoosting yerine ~5-10x daha hızlı)
+try:
+    from lightgbm import LGBMRegressor
+    HAS_LIGHTGBM = True
+except ImportError:
+    HAS_LIGHTGBM = False
+    logger.info("LightGBM bulunamadı.")
+
+# XGBoost (opsiyonel)
 try:
     from xgboost import XGBRegressor
     HAS_XGBOOST = True
 except ImportError:
     HAS_XGBOOST = False
-    logger.info("XGBoost bulunamadı, GradientBoosting + RandomForest kullanılacak.")
+    logger.info("XGBoost bulunamadı.")
 
 
 class BISTAIModel:
@@ -79,11 +119,10 @@ class BISTAIModel:
     def _get_weekly_trend(self):
         """Haftalık SMA cross ve RSI — üst zaman dilimi trend teyidi."""
         try:
-            weekly = yf.download(self.symbol, period="2y", interval="1wk", progress=False)
+            weekly = _safe_yf_download(self.symbol, period="2y", interval="1wk", max_retries=2, retry_delay=1)
             if weekly.empty or len(weekly) < 25:
                 return None
-            if isinstance(weekly.columns, pd.MultiIndex):
-                weekly.columns = weekly.columns.get_level_values(0)
+            weekly = _flatten_yf_columns(weekly)
             weekly['SMA_10w'] = weekly['Close'].rolling(10).mean()
             weekly['SMA_20w'] = weekly['Close'].rolling(20).mean()
             weekly['Weekly_Trend'] = (weekly['SMA_10w'] > weekly['SMA_20w']).astype(int)
@@ -98,11 +137,10 @@ class BISTAIModel:
     def _get_usdtry_features(self):
         """USD/TRY kur verisini sentiment proxy olarak kullan."""
         try:
-            fx = yf.download("USDTRY=X", period="2y", interval="1d", progress=False)
+            fx = _safe_yf_download("USDTRY=X", period="2y", interval="1d", max_retries=2, retry_delay=1)
             if fx.empty or len(fx) < 30:
                 return None
-            if isinstance(fx.columns, pd.MultiIndex):
-                fx.columns = fx.columns.get_level_values(0)
+            fx = _flatten_yf_columns(fx)
             fx['USDTRY'] = fx['Close']
             fx['USDTRY_Return'] = fx['Close'].pct_change()
             fx['USDTRY_SMA10'] = fx['Close'].rolling(10).mean()
@@ -222,14 +260,14 @@ class BISTAIModel:
         return df
 
     def fetch_and_train(self):
-        # ─── 1) Veri İndirme ───
-        data = yf.download(self.symbol, period="2y", interval="1d", progress=False)
-        if data.empty:
+        # ─── 1) Veri İndirme (sıralı + semafor korumalı) ───
+        data = _safe_yf_download(self.symbol, period="2y", interval="1d", max_retries=3, retry_delay=2)
+
+        if data is None or (hasattr(data, 'empty') and data.empty):
+            logger.warning(f"Veri indirilemedi: {self.symbol}")
             return None
 
-        df = data.copy()
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+        df = _flatten_yf_columns(data.copy())
 
         if len(df) < 100:
             return None
@@ -266,7 +304,7 @@ class BISTAIModel:
         X = X.iloc[:-1]
 
         # ─── 5) Ölçekleme ───
-        tscv = TimeSeriesSplit(n_splits=5)
+        tscv = TimeSeriesSplit(n_splits=3)  # 3 fold = %40 daha hızlı CV
         X_scaled = pd.DataFrame(
             self.scaler.fit_transform(X),
             columns=X.columns,
@@ -274,36 +312,46 @@ class BISTAIModel:
         )
 
         # ─── 6) Multi-Model Tanımlama (Ensemble) ───
-        models = {
-            "GradientBoosting": GradientBoostingRegressor(
-                n_estimators=200, max_depth=5, learning_rate=0.05,
-                subsample=0.8, min_samples_split=10, min_samples_leaf=5,
-                random_state=42,
-            ),
-            "RandomForest": RandomForestRegressor(
-                n_estimators=200, max_depth=8,
-                min_samples_split=10, min_samples_leaf=5,
-                random_state=42,
-            ),
-        }
+        # LightGBM: GradientBoosting yerine ~5-10x hızlı histogram-bazlı öğrenme
+        models = {}
+
+        if HAS_LIGHTGBM:
+            models["LightGBM"] = LGBMRegressor(
+                n_estimators=150, max_depth=5, learning_rate=0.05,
+                subsample=0.8, colsample_bytree=0.8,
+                min_child_samples=10, num_leaves=31,
+                n_jobs=_N_JOBS, random_state=42,
+                verbosity=-1, force_col_wise=True,
+            )
+
+        models["RandomForest"] = RandomForestRegressor(
+            n_estimators=150, max_depth=8,
+            min_samples_split=10, min_samples_leaf=5,
+            n_jobs=_N_JOBS, random_state=42,
+        )
 
         if HAS_XGBOOST:
             models["XGBoost"] = XGBRegressor(
-                n_estimators=200, max_depth=5, learning_rate=0.05,
+                n_estimators=150, max_depth=5, learning_rate=0.05,
                 subsample=0.8, colsample_bytree=0.8,
                 min_child_weight=5, random_state=42,
-                verbosity=0,
+                nthread=_N_JOBS, verbosity=0,
             )
 
         # ─── 7) Cross-Validation & Ağırlıklı Ensemble ───
+        # n_jobs=1: her model zaten n_jobs=_N_JOBS ile tüm çekirdekleri kullanıyor
+        # cross_val_score(n_jobs=4) + model(n_jobs=4) = 16 thread → CPU thrashing!
         cv_scores = {}
+        cv_fold_details = {}  # Her model için fold bazlı R² skorları
         for name, model in models.items():
             try:
-                scores = cross_val_score(model, X_scaled, y.values.ravel(), cv=tscv, scoring='r2')
+                scores = cross_val_score(model, X_scaled, y.values.ravel(), cv=tscv, scoring='r2', n_jobs=1)
                 cv_scores[name] = float(scores.mean())
+                cv_fold_details[name] = [round(float(s), 4) for s in scores]
             except Exception as e:
                 logger.warning(f"{name} CV hatası: {e}")
                 cv_scores[name] = -1.0
+                cv_fold_details[name] = []
 
         # Ağırlıkları R² oranına göre hesapla
         positive_scores = {k: max(0, v) for k, v in cv_scores.items()}
@@ -339,6 +387,16 @@ class BISTAIModel:
             'importance': importances
         }).sort_values('importance', ascending=False)
 
+        # Full feature importance listesi (drill-down için)
+        feature_importances_full = [
+            {"name": row['feature'], "importance": round(float(row['importance']), 6)}
+            for _, row in importance_df.iterrows()
+        ]
+
+        # Son günün feature değerleri (popup için)
+        last_row = X.iloc[-1]
+        feature_values = {col: round(float(last_row[col]), 6) for col in feature_cols}
+
         # Önemli feature'lar (kümülatif %90'ı açıklayan)
         importance_df['cumsum'] = importance_df['importance'].cumsum()
         top_features = importance_df[importance_df['cumsum'] <= 0.90]['feature'].tolist()
@@ -349,9 +407,27 @@ class BISTAIModel:
 
         # ─── 9) Yönsel Doğruluk (Walk-Forward) + Kelly Verileri ───
         y_pred_cv = np.zeros(len(y))
+        fold_directional = []  # Her fold için doğruluk detayı
+        fold_num = 0
         for train_idx, test_idx in tscv.split(X_scaled):
+            fold_num += 1
             self.model.fit(X_scaled.iloc[train_idx], y.values.ravel()[train_idx])
-            y_pred_cv[test_idx] = self.model.predict(X_scaled.iloc[test_idx])
+            fold_preds = self.model.predict(X_scaled.iloc[test_idx])
+            y_pred_cv[test_idx] = fold_preds
+            # Fold bazlı yönsel doğruluk hesapla
+            fold_close = X_scaled.index[test_idx].map(lambda i: float(df.loc[i, 'Close'])).values
+            fold_actual_dir = np.sign(y.values.ravel()[test_idx] - fold_close)
+            fold_pred_dir = np.sign(fold_preds - fold_close)
+            fold_correct = int(np.sum(fold_actual_dir == fold_pred_dir))
+            fold_total = len(test_idx)
+            fold_directional.append({
+                "fold": fold_num,
+                "correct": fold_correct,
+                "total": fold_total,
+                "accuracy": round(fold_correct / fold_total, 4) if fold_total > 0 else 0,
+                "train_size": len(train_idx),
+                "test_size": fold_total,
+            })
 
         close_vals = X_scaled.index.map(lambda i: float(df.loc[i, 'Close'])).values
         actual_direction = np.sign(y.values.ravel() - close_vals)
@@ -385,10 +461,7 @@ class BISTAIModel:
             avg_loss = 0.01
 
         # ─── 10) Final Tahmin (Ağırlıklı Ensemble) ───
-        # Tüm modelleri tekrar eğit (final)
-        for name, model in trained_models.items():
-            model.fit(X_scaled, y.values.ravel())
-
+        # Modeller zaten bölüm 7'de full data ile eğitildi, tekrar eğitmiyoruz
         last_features = X_scaled.iloc[[-1]]
 
         # Ağırlıklı ensemble tahmin
@@ -431,6 +504,14 @@ class BISTAIModel:
         # ─── 13) Stop-Loss / Take-Profit ───
         stop_levels = self._calculate_stop_levels(df, base_signal, current_price)
 
+        # Eğitim veri tarih aralığı
+        training_start = str(df.index[0].date()) if hasattr(df.index[0], 'date') else str(df.index[0])
+        training_end = str(df.index[-1].date()) if hasattr(df.index[-1], 'date') else str(df.index[-1])
+
+        # RSI detay
+        rsi_series = df['RSI_14'].dropna().tail(20)
+        rsi_history = [{"date": str(idx.date()), "value": round(float(v), 2)} for idx, v in rsi_series.items()]
+
         # ─── 14) Sonuç ───
         return {
             "symbol": self.symbol,
@@ -467,4 +548,13 @@ class BISTAIModel:
             "win_rate": round(win_rate, 4),
             "avg_win": round(avg_win, 6),
             "avg_loss": round(avg_loss, 6),
+            # ─── Drill-down detay verileri ───
+            "drill_down": {
+                "cv_fold_details": cv_fold_details,
+                "feature_importances": feature_importances_full,
+                "feature_values": feature_values,
+                "directional_folds": fold_directional,
+                "training_date_range": {"start": training_start, "end": training_end},
+                "rsi_history": rsi_history,
+            },
         }

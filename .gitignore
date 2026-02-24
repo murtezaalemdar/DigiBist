@@ -52,3 +52,20 @@ TasarımAsamasındakiProjeler/
 
 # GitHub chatmodes (VS Code local)
 .github/
+
+# Test/benchmark scripts (local only)
+test_*.py
+benchmark.py
+lgb_benchmark.py
+*_benchmark.py
+gpu_test*.py
+xgb_cuda_check.py
+check_stocks.py
+patch_feature_values.py
+
+# Backups (too large for git)
+backups/
+
+# Deploy scripts (local machine specific)
+deploy_server.py
+deploy_setup.py
