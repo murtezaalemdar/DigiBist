@@ -20,3 +20,4 @@
 | 2026-02-24 | Sticky header wrapper pattern | Navbar ve LiveTicker ayrı sticky yerine tek parent div ile sarıldı. İkisi birlikte scroll'da sabit kalıyor |
 | 2026-02-24 | XU100 endeks Navbar'da gösterim | BIST100 endeks değeri yatırımcı için önemli referans. WS döngüsünde yfinance XU100.IS çekilir, Navbar badge olarak gösterilir |
 | 2026-02-24 | Sidebar filterText ayrı state | Navbar searchQuery global filtre (App.js filteredStocks), Sidebar filterText lokal filtre. İkisi bağımsız çalışır |
+| 2026-02-24 | v8.06.02 Bug Fix Release - 14 kritik/orta hata düzeltildi. Toplam 54 bug'dan 14'ü fix'lendi, 40'ı düşük öncelikli olarak backlog'da. Production deployment başarılı (commit 63519a5). Backend port conflict sorunu yaşandı ancak çözüldü. | - |

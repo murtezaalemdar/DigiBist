@@ -1,8 +1,44 @@
 # Active Context — 24 Şubat 2026
 
 ## Current Goals
-- v8.06 versiyona bump + git commit & push
-- Sonraki özellik geliştirmeleri planlanacak
+
+- ## Aktif Çalışma - v8.06.02 Deployment Tamamlandı (24 Şubat 2026)
+- ### Son Durum
+- - v8.06.02 başarıyla deploy edildi ve production'da çalışıyor
+- - Backend: 4 worker process aktif, tüm endpoint'ler çalışıyor
+- - Frontend: React build deploy edildi, Nginx üzerinden serve ediliyor
+- - GARAN forecast testi başarılı (signal: SELL, confidence: 0.53)
+- ### v8.06.02'de Yapılan Bug Fix'ler (14 fix, 11 dosya)
+- **Backend (8 fix):**
+- 1. main.py: HTTPException global import eklendi
+- 2. main.py: CORS `["*"]` → `ALLOWED_ORIGINS` listesi
+- 3. main.py: `_last_provider`/`_provider_switches` modül seviyesinde initialize
+- 4. main.py: RSI hesaplama divide-by-zero guard
+- 5. main.py: `asyncio.get_event_loop()` → `asyncio.get_running_loop()`
+- 6. database.py: SQL injection koruması (column whitelist)
+- 7. telegram_notifier.py: current_price=0 divide-by-zero guard
+- 8. execution_engine.py: broker place_order() signature düzeltmesi
+- 9. main.py: 4 broker mutation endpoint'e auth eklendi
+- **Frontend (6 fix):**
+- 1. App.js: Authorization bypass düzeltmesi (6 sayfa)
+- 2. App.js: 7 fetch çağrısına res.ok kontrolü
+- 3. App.js: Dead ADMIN_API_BASE import kaldırıldı
+- 4. AnalysisChartModal.js: setInterval → setChartInterval (window.setInterval shadowing)
+- 5. FeaturePopup.js: data.best_model → data.model_name
+- 6. SettingsPage.js: Broker API çağrıları fetch → authFetch
+- ### Deployment Bilgileri
+- - Server: Ubuntu 24.04, 192.168.0.28, SSH root erişimi
+- - Backend: /opt/digibist/backend/ (uvicorn, 4 workers, port 8000)
+- - Frontend: /opt/digibist/frontend/build/ (Nginx, port 80)
+- - Database: PostgreSQL localhost:5432/bist_trading
+- - Git: commit 63519a5 pushed to origin/main
+- ### Bilinen Sorunlar (Düşük Öncelik)
+- - Hardcoded DB password/JWT secret (env vars kullanılmalı)
+- - SSL verification disabled in live_price_provider.py
+- - Race conditions in risk_engine class variables
+- - Memory leak (cache cleanup yok)
+- - AbortController eksik frontend fetch'lerde
+- - Worker process state isolation
 
 ## ⚠️ VERSİYON ARTIRMA — HER DEPLOY'DA ZORUNLU!
 - `deploy.ps1` kullan (otomatik artırır) veya `config.js` APP_VERSION'ı manuel artır
