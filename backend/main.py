@@ -186,6 +186,24 @@ async def get_forecast(symbol: str, notify: bool = False, force: bool = False):
         try:
             cached_data = await get_cached_forecast(symbol, ttl_seconds=CACHE_TTL)
             if cached_data is not None:
+                # Cache'deki SL/TP'yi risk sinyaline göre düzelt
+                _cs = cached_data.get("signal")
+                _crs = cached_data.get("risk_signal")
+                if _crs and _crs != _cs:
+                    _atr = cached_data.get("atr", cached_data.get("current_price", 0) * 0.02)
+                    _cp = cached_data.get("current_price", 0)
+                    if _crs == "BUY":
+                        cached_data["stop_loss"] = round(_cp - (2.0 * _atr), 2)
+                        cached_data["take_profit"] = round(_cp + (3.0 * _atr), 2)
+                    elif _crs == "SELL":
+                        cached_data["stop_loss"] = round(_cp + (2.0 * _atr), 2)
+                        cached_data["take_profit"] = round(_cp - (3.0 * _atr), 2)
+                    else:  # HOLD
+                        cached_data["stop_loss"] = round(_cp - (1.5 * _atr), 2)
+                        cached_data["take_profit"] = round(_cp + (1.5 * _atr), 2)
+                    _sl_d = abs(_cp - cached_data["stop_loss"])
+                    _tp_d = abs(cached_data["take_profit"] - _cp)
+                    cached_data["risk_reward_ratio"] = round(_tp_d / _sl_d, 2) if _sl_d > 0 else 0
                 return cached_data
         except Exception as exc:
             logger.warning(f"Cache okunamadı ({symbol}): {exc}")
@@ -226,6 +244,26 @@ async def get_forecast(symbol: str, notify: bool = False, force: bool = False):
     result["risk_adjusted"] = risk_eval["risk_adjusted"]
     result["confidence_threshold"] = risk_eval.get("confidence_threshold", 0.70)
     result["filters_applied"] = risk_eval.get("filters_applied", [])
+
+    # ── Stop-Loss / Take-Profit: Risk sinyali değiştiyse yeniden hesapla ──
+    if result["risk_signal"] != result["signal"]:
+        _atr = result.get("atr", result["current_price"] * 0.02)
+        _cp = result["current_price"]
+        _rs = result["risk_signal"]
+        if _rs == "BUY":
+            result["stop_loss"] = round(_cp - (2.0 * _atr), 2)
+            result["take_profit"] = round(_cp + (3.0 * _atr), 2)
+        elif _rs == "SELL":
+            result["stop_loss"] = round(_cp + (2.0 * _atr), 2)
+            result["take_profit"] = round(_cp - (3.0 * _atr), 2)
+        else:  # HOLD
+            result["stop_loss"] = round(_cp - (1.5 * _atr), 2)
+            result["take_profit"] = round(_cp + (1.5 * _atr), 2)
+        _sl_dist = abs(_cp - result["stop_loss"])
+        _tp_dist = abs(result["take_profit"] - _cp)
+        result["risk_reward_ratio"] = round(_tp_dist / _sl_dist, 2) if _sl_dist > 0 else 0
+        logger.info(f"[{result['symbol']}] SL/TP risk sinyaline göre güncellendi: "
+                     f"{result['signal']}→{_rs}, SL={result['stop_loss']}, TP={result['take_profit']}")
 
     # Kelly Criterion pozisyon boyutlandırma
     kelly = RiskEngine.kelly_position_size(
