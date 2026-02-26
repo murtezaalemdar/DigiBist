@@ -42,7 +42,8 @@ güvenilir AL/SAT/TUT sinyalleri üretir. Risk Engine düşük güvenli sinyalle
 
 ## Versiyon Geçmişi (Son)
 
-- v8.09.00 (aktif): AI Tahmin Geçmişi & Doğruluk Analizi Sayfası
+- v8.09.01 (aktif): Tüm Proje Dokümantasyonu Sprint'i #2 — 18 dosya JSDoc/docstring + config.js versiyon bump
+- v8.09.00: AI Tahmin Geçmişi & Doğruluk Analizi Sayfası
 - v8.08.00: RSI Divergence + Kelly DrillDown + Bug Fixler
 - v8.07.00: Fırsat Bildirim Sistemi (Opportunity Scanner)
 - v8.06.02: 14 Bug Fix Release

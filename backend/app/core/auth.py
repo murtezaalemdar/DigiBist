@@ -1,6 +1,48 @@
 """
-BIST AI Trading — JWT Authentication Katmanı
-PostgreSQL users tablosuyla entegre.
+BIST AI Trading — JWT Authentication & RBAC Katmanı (v8.09)
+═══════════════════════════════════════════════════════════
+
+PostgreSQL `users` ve `user_permissions` tablolarıyla entegre,
+JWT token tabanlı kimlik doğrulama ve rol bazlı erişim kontrol modülü.
+
+Mimari
+──────
+1. JWT Konfigürasyonu  — HS256, 24 saat token ömrü, SECRET_KEY env var
+2. Şifre Hashleme      — bcrypt (passlib), verify_password / hash_password
+3. FastAPI Security     — HTTPBearer scheme, auto_error=False
+4. Pydantic Modelleri   — TokenPayload, LoginRequest, RegisterRequest, TokenResponse, UserInfo
+5. Yardımcı Fonksiyonlar — create_access_token, decode_token
+6. Veritabanı İşlemleri — authenticate_user, register_user (bcrypt + DB INSERT)
+7. Kullanıcı CRUD       — get_user_by_id, list_users, update_user, change_user_password, delete_user
+8. İzin (Permission)    — get_all_permissions, get_user_permissions, set_user_permissions, check_user_permission
+9. FastAPI Dependency    — get_current_user (Bearer token doğrulama), require_auth (decorator)
+
+Güvenlik Notları
+────────────────
+- SECRET_KEY production'da env var olarak ayarlanmalı (varsayılan değer DEV amaçlı)
+- Token'da sub (username), user_id, name, role, exp alanları tutulur
+- bcrypt cost factor varsayılan (12 rounds)
+- Tüm DB işlemleri asyncpg ile asenkron
+
+Kullanım
+────────
+  from app.core.auth import get_current_user, require_auth, check_user_permission
+  # FastAPI endpoint'inde:
+  @app.get("/api/protected")
+  async def protected(user=Depends(get_current_user)):
+      ...
+  # İzin kontrolü:
+  has_perm = await check_user_permission(user_id, "dashboard.view")
+
+Tablo Yapısı
+────────────
+- users: id, username, email, password (bcrypt hash), name, role, is_active, created_at, updated_at
+- user_permissions: user_id FK, permission (string), granted_at
+
+Changelog
+─────────
+- v8.09.01: Detaylı module docstring eklendi (Sprint 3)
+- v8.09.00: İlk JWT + RBAC implementasyonu
 """
 
 import os

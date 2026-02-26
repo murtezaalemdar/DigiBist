@@ -2,7 +2,23 @@
 
 ## Done
 
-- ✅ v8.09.01 — Tüm Proje Dokümantasyonu & Detaylı Kod Yorumları Sprint'i (26–27 Şubat 2026)
+- ✅ v8.09.01 Sprint 3 — Kalan Dosyalar Dokümantasyonu & Memory Bank Kapsamlı Güncelleme (27 Şubat 2026)
+  - Memory Bank: projectBrief.md — Docker→native, tech stack güncel (TradingView, systemd, Nginx)
+  - Memory Bank: architect.md — Deployment diyagramı, 7 yeni karar (#9-#15)
+  - Memory Bank: systemPatterns.md — Mimari diyagram native deployment'a güncellendi
+  - Memory Bank: productContext.md — v8.09.01 versiyon geçmişi eklendi
+  - Memory Bank: decisionLog.md — Sprint 2+3 karar kaydı eklendi
+  - Backend: `auth.py` — 30+ satır module docstring (JWT, bcrypt, RBAC, 8 bölüm, 17 fonksiyon)
+  - Backend: `risk_engine.py` — 20+ satır module docstring (6 metot, sabitler, drawdown)
+  - Backend: `telegram_notifier.py` — 15+ satır module docstring (env vars, signal emoji, httpx)
+  - Backend: `auto_trader.py` — 15+ satır module docstring (orchestrator, asyncio loop, PostgreSQL log)
+  - Backend: `strategy_engine.py` — 25+ satır module docstring (3 strateji, IndicatorSet 14 alan)
+  - Backend: `execution_engine.py` — 20+ satır module docstring (spread/slippage, broker, OrderRecord)
+  - Frontend: `Sidebar.js` — 20+ satır JSDoc (props, filtre, favori, canlı fiyat)
+  - Frontend: `LiveTicker.js` — 20+ satır JSDoc (kayan animasyon, hız, bağlantı)
+  - Frontend: `helpers.js` — 12+ satır JSDoc (getRiskColor, Tailwind renk haritası)
+  - Git commit + GitHub push + lokal zip yedek
+- ✅ v8.09.01 Sprint 2 — Tüm Proje Dokümantasyonu & Detaylı Kod Yorumları Sprint'i (26–27 Şubat 2026)
   - Backend: `model.py` — 60+ satır module docstring (mimari, veri kaynakları, 50 özellik, 14 adımlı akış, performans)
   - Backend: `database.py` — 40+ satır module docstring (bağlantı, ORM, fonksiyon grupları, tablo yapısı, changelog)
   - Backend: `main.py` — 30 satır module docstring + 18 numaralı section header (1-8)
@@ -75,7 +91,7 @@
 
 ## Doing
 
-- Yedek alınıyor: Git commit + GitHub push + lokal zip
+- (Yok — Sprint 3 tamamlandı)
 
 ## Next
 

@@ -1,6 +1,42 @@
 """
-Auto Trade Orchestrator — PostgreSQL destekli.
-Tüm loglar kalıcı olarak veritabanına kaydedilir.
+BIST AI Trading — Auto Trade Orchestrator (v8.09)
+═════════════════════════════════════════════════
+
+Arka planda çalışan hafif otomatik ticaret döngüsü.
+AI tahminlerini değerlendirip, belirtilen yapılandırmaya göre
+periyodik olarak emir akışını çalıştırır.
+
+Mimari
+──────
+  main.py start_auto_trade() → AutoTrader.start(config, runner)
+      └─ asyncio.create_task(loop)
+          └─ her cycle_seconds saniyede runner(config) çağırılır
+          └─ runner: AI forecast → strateji → risk → emir yönlendirme
+
+Bileşenler
+──────────
+- AutoTradeLog (dataclass) — symbol, action, reason, mode, ts alanları
+- AutoTrader (class):
+  - start(config, runner) — asyncio Task oluşturur, eskiyi iptal eder
+  - stop()               — döngüyü durdurur, Task'ı iptal eder
+  - add_log(...)         — trade kaydını PostgreSQL'e yazar (save_auto_trade_log)
+  - status()             — enabled, config, son 50 log'u döner
+
+PostgreSQL Entegrasyonu
+───────────────────────
+- save_auto_trade_log()         — yeni log INSERT
+- get_recent_auto_trade_logs()  — limit bazlı son logları SELECT
+- DB hatası auto-trade döngüsünü durdurmaz (try/except pass)
+
+Yapılandırma (config dict)
+──────────────────────────
+- cycle_seconds: tarama aralığı (varsayılan 60s)
+- Ek alanlar runner fonksiyonunda tanımlanır
+
+Changelog
+─────────
+- v8.09.01: Detaylı module docstring eklendi (Sprint 3)
+- v8.05.00: İlk Auto Trader implementasyonu
 """
 
 import asyncio

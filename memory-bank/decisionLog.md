@@ -37,3 +37,5 @@
 | 2026-02-26 | Auth token key: bist_token | PredictionHistoryPage başlangıçta localStorage.getItem('token') kullanıyordu ama gerçek key 'bist_token'. useAuth() hook'undaki authFetch kullanılarak 401 hatası çözüldü |
 | 2026-02-26 | Dual signal display (AI + Risk) | Frontend risk_signal  || signal gösteriyordu → hep HOLD. Çözüm: AI Sinyal (orijinal BUY/SELL) + Risk Sonuç (risk_signal) ayrı kolonlarda. ⚠ uyarı ikonu farklılıkta |
 | 2026-02-26 | Skor hesaplama: yön 50 + hassasiyet 50 | Yön doğruysa +50 puan, fiyat hassasiyetine göre 0-50 bonus (price_error_pct * 5 çıkarılır). Max 100 puan |
+| 2026-02-27 | v8.09.01 Sprint 2: 18 dosya dokümantasyon | Backend 5 + Frontend 10 + config.js modül docstring/JSDoc. 3 katmanlı yaklaşım: module header → section headers → inline. Versiyon bump v8.07→v8.09.01 |
+| 2026-02-27 | v8.09.01 Sprint 3: Kalan dosyalar + memory bank | Backend 6 (auth, risk_engine, telegram, auto_trader, strategy, execution) + Frontend 3 (Sidebar, LiveTicker, helpers) dokümantasyon. Memory bank 6 dosya kapsamlı güncelleme (Docker→native, TradingView ekleme, mimari diyagram) |

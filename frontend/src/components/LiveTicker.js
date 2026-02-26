@@ -1,7 +1,40 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Wifi, WifiOff } from 'lucide-react';
 
-/** Üst kısımda sürekli kayan canlı fiyat şeridi */
+/**
+ * LiveTicker — Kayan Canlı Fiyat Şeridi (v8.09)
+ * ═══════════════════════════════════════════════
+ *
+ * Sayfanın üst kısmında (Navbar altında) sürekli sola kayan marquee tarzı
+ * canlı hisse fiyat şeridi. Sticky header wrapper içinde Navbar ile birlikte
+ * sabitlenir (z-50).
+ *
+ * @param {Object}   prices       — Canlı fiyat nesnesi {THYAO: {price, change, signal}, ...}
+ * @param {boolean}  isConnected  — WebSocket bağlantı durumu (yeşil/gri ikon)
+ * @param {number}   speed        — Kayma hızı (piksel/saniye, varsayılan 120)
+ * @param {Function} onSymbolClick — Sembol tıklama callback'i (hisse analizini açar)
+ *
+ * Kayan Animasyon Mekanizması:
+ * - CSS @keyframes ticker-scroll: translateX(0) → translateX(-50%)
+ * - entries dizisi 2x render edilir (orijinal + _dup): kesintisiz döngü efekti
+ * - duration: scrollWidth / 2 / speed (içerik genişliğine göre otomatik hesap)
+ * - Mouse hover: animasyonPlayState='paused' → kullanıcı fiyatı okuyabilir
+ *
+ * Bağlantı Durumu:
+ * - Wifi + "CANLI" (yeşil, animate-pulse): WebSocket aktif
+ * - WifiOff + "BAĞLANTI YOK" (gri): WebSocket kopuk
+ *
+ * Sinyal Gösterimi:
+ * - BUY: yeşil ring + yeşil arka plan + animate-pulse badge
+ * - SELL: kırmızı ring + kırmızı arka plan + animate-pulse badge
+ * - HOLD: sarı badge (pulse yok)
+ * - XU100 filtrelenir (Navbar'da ayrıca gösterilir)
+ *
+ * Changelog:
+ * - v8.09.01: JSDoc header eklendi (Sprint 3)
+ * - v8.06.00: XU100 filtreleme, onSymbolClick entegrasyonu
+ * - v8.05.00: İlk LiveTicker implementasyonu
+ */
 const LiveTicker = ({ prices, isConnected, speed = 120, onSymbolClick }) => {
   const entries = Object.entries(prices).filter(([sym]) => sym !== 'XU100');
   const trackRef = useRef(null);

@@ -3,11 +3,28 @@
 ## Mimari Yapı
 
 ```
-[React Frontend :3000] ←→ [FastAPI ML Backend :8000] ←→ [PostgreSQL :5432]
-                                    ↕                           ↕
-                            [WebSocket Stream]         [Filament Admin :8001]
-                                    ↕
-                            [Telegram Bot API]
+    ┌──────────────────────┐
+    │  Nginx (port 80)     │ ← Browser
+    │  └─ React SPA build  │
+    └──────────┬───────────┘
+               │ proxy /api /ws
+    ┌──────────▼───────────┐        ┌───────────────────┐
+    │  FastAPI Backend     │◄──────►│  PostgreSQL 16    │
+    │  (systemd, port 8000)│        │  localhost:5432   │
+    │  uvicorn x4 workers  │        │  bist_trading DB  │
+    │  ├─ ML Engine        │        └─────────┬─────────┘
+    │  ├─ WebSocket /ws    │                  │
+    │  ├─ Risk Engine      │        ┌─────────▼─────────┐
+    │  ├─ Strategy Engine  │        │  Filament Admin   │
+    │  ├─ Execution Engine │        │  (port 8001)      │
+    │  └─ Opportunity Scan │        └───────────────────┘
+    └──────────┬───────────┘
+               │
+    ┌──────────▼───────────┐
+    │  TradingView Scanner │ (birincil fiyat kaynağı)
+    │  Yahoo Spark API     │ (yedek)
+    │  Telegram Bot API    │ (bildirim)
+    └──────────────────────┘
 ```
 
 ## Architectural Patterns

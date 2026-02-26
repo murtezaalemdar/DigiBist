@@ -1,3 +1,44 @@
+"""
+BIST AI Trading — Risk Engine v2.0 (v8.09)
+═══════════════════════════════════════════
+
+AI sinyal filtreleme ve pozisyon boyutlandırma motoru.
+ML modelden gelen ham BUY/SELL sinyallerini güven eşiği, drawdown koruması,
+Kelly Criterion ve market rejim uyumu filtrelerinden geçirir.
+
+Mimari
+──────
+- ML Pipeline çıktısı (signal + confidence) → RiskEngine.evaluate_signal() → nihai sinyal
+- Tüm state sınıf değişkenlerinde tutulur (uygulama ömrü boyunca — worker bazlı)
+
+Sabitler
+────────
+- MAX_POSITION_SIZE = 50.000 TRY (tek pozisyon üst limiti)
+- MAX_ALLOCATION_PCT = %20 (portföyden tek hisseye maks. oran)
+- MAX_VOLATILITY_THRESHOLD = %5
+- MAX_DRAWDOWN_PCT = %10 (portföy düzeyinde drawdown koruması)
+- KELLY_FRACTION = 0.5 (Half-Kelly — muhafazakâr yaklaşım)
+
+Metotlar
+────────
+1. _dynamic_confidence_threshold(atr, market_regime) — ATR + rejim bazlı eşik
+2. kelly_position_size(win_rate, avg_win, avg_loss, portfolio_value) — Half-Kelly hesaplama
+3. update_drawdown(portfolio_value) — Drawdown oranı güncelle, yüksek su işareti (HWM)
+4. record_trade_result(profit_loss) — Ardışık kayıp sayacı güncelle
+5. check_position(signal, position_value, portfolio_value) — Pozisyon limiti kontrolü
+6. evaluate_signal(signal, confidence, ...) — Ana filtre fonksiyonu (tüm kuralları uygular)
+
+⚠️ Bilinen Sorunlar
+────────────────────
+- Sınıf değişkenleri worker'lar arası paylaşılmaz (her uvicorn worker kendi state'ini tutar)
+- Güven eşiği ~%75 → mevcut model avg confidence %48 → neredeyse tüm sinyaller HOLD'a dönüyor
+- Race condition potansiyeli: concurrent request'lerde drawdown state tutarsız olabilir
+
+Changelog
+─────────
+- v8.09.01: Module docstring eklendi (Sprint 3)
+- v8.08.00: İlk Risk Engine v2 implementasyonu
+"""
 import logging
 
 logger = logging.getLogger(__name__)

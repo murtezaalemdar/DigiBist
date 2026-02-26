@@ -1,7 +1,39 @@
 import React, { useState, useMemo } from 'react';
 import { Activity, Zap, BrainCircuit, Star, Filter, Search, X } from 'lucide-react';
 
-/** Sol kenar takip listesi + premium kartı */
+/**
+ * Sidebar — Sol Kenar Takip Listesi & Premium Kartı (v8.09)
+ * ══════════════════════════════════════════════════════════
+ *
+ * Dashboard sol panelinde BIST100 hisseleri listesi, favori yönetimi
+ * ve canlı fiyat bilgilerini gösteren yapışkan sidebar bileşeni.
+ *
+ * @param {Object[]} stocks        — Hisse dizisi ({symbol, name, current_price, change_percent})
+ * @param {Object}   livePrices    — WebSocket canlı fiyatlar {THYAO: {price, change, signal}, ...}
+ * @param {string}   selectedSymbol — Seçili hisse sembolü (mavi highlight)
+ * @param {Function} setSelectedSymbol — Hisse seçim callback'i
+ * @param {string}   searchQuery   — Navbar'dan gelen global arama (sonuç sayısı gösterimi)
+ * @param {string[]} favorites     — Favori sembol listesi (localStorage)
+ * @param {Function} toggleFavorite — Favori ekle/çıkar callback'i
+ *
+ * Özellikler:
+ * - Tümü / Favoriler sekme filtresi (buton toggle)
+ * - Lokal arama kutusu (sembol + şirket adı, filterText state)
+ * - Canlı fiyat + % değişim + AI sinyal gösterimi (WebSocket)
+ * - Favori yıldız (tıkla ekle/çıkar, localStorage persist)
+ * - Seçili hisse: mavi border + translate-x-1 animasyon + Zap pulse
+ * - Boş durum: "Favori hisse yok" placeholder
+ * - Responsive: lg:sticky lg:top-20, max-h-[60vh] xl:max-h-[70vh] scroll
+ *
+ * Kullanılan Hook'lar:
+ * - useState: showOnlyFavorites, filterText
+ * - useMemo: displayStocks (filtre + favori + arama kombinasyonu)
+ *
+ * Changelog:
+ * - v8.09.01: JSDoc header eklendi (Sprint 3)
+ * - v8.06.00: Hisse arama kutusu eklendi (filterText)
+ * - v8.05.00: İlk Sidebar implementasyonu
+ */
 const Sidebar = ({
   stocks = [],
   livePrices = {},

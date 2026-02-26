@@ -2,13 +2,12 @@
 
 ## Current Goals
 
-- ## Son Durum — v8.09.01 Tüm Proje Dokümantasyonu Sprint'i (TAMAMLANIYOR)
+- ## Son Durum — v8.09.01 Sprint 3: Kalan Dosyalar + Memory Bank (TAMAMLANDI)
 - ### Tamamlanan
-- - 18 dosyaya detaylı JSDoc/docstring eklendi (backend 5 + frontend 10 + memory bank 2 + config 1)
-- - Module docstring + section header + inline yorum — 3 katmanlı dokümantasyon
-- - config.js versiyon v8.07 → v8.09.01 bump yapıldı
-- ### Yedek Bekliyor
-- - Git commit + GitHub push + lokal zip yedek alınacak
+- - Memory Bank 6 dosya kapsamlı güncelleme (Docker→native, TradingView, mimari diyagram, karar #9-#15)
+- - Backend 6 dosya detaylı module docstring (auth, risk_engine, telegram, auto_trader, strategy, execution)
+- - Frontend 3 dosya JSDoc header (Sidebar, LiveTicker, helpers)
+- - Sprint 2'de zaten 18 dosya dokümante edilmişti — toplam 27+ dosya tamamlandı
 - ### Deployment Bilgileri
 - - Server: Ubuntu 24.04, 192.168.0.28, SSH root erişimi
 - - Backend: /opt/digibist/backend/ — `systemctl restart digibist-backend` ile yönetilir
@@ -26,7 +25,7 @@
 
 ## ⚠️ VERSİYON ARTIRMA — HER DEPLOY'DA ZORUNLU!
 - `deploy.ps1` kullan (otomatik artırır) veya `config.js` APP_VERSION'ı manuel artır
-- Mevcut versiyon: **v8.07.00** → **v8.08.00'a bump edilmeli**
+- Mevcut versiyon: **v8.09.01**
 
 ## Mevcut Durum
 

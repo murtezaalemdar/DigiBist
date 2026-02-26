@@ -1,3 +1,43 @@
+"""
+BIST AI Trading — Telegram Bildirim Servisi (v8.09)
+════════════════════════════════════════════════════
+
+AI sinyalleri ve fırsat bildirimleri için Telegram Bot API entegrasyonu.
+httpx ile asenkron HTTP POST ile mesaj gönderir.
+
+Ortam Değişkenleri
+──────────────────
+- TELEGRAM_BOT_TOKEN — BotFather'dan alınan bot token'ı (zorunlu)
+- TELEGRAM_CHAT_ID   — Hedef sohbet/kanal ID'si (zorunlu)
+- İkisi de boşsa bildirimler sessizce atlanır (warning log)
+
+Sinyal Emoji Haritası
+─────────────────────
+- BUY  → 🟢 (yeşil daire)
+- SELL → 🔴 (kırmızı daire)
+- HOLD → 🟡 (sarı daire)
+
+Kullanım
+────────
+  await TelegramNotifier.send_message("<b>Test</b>")
+  await TelegramNotifier.notify_signal("THYAO", "BUY", 182.50, 190.00, 0.85)
+
+Mesaj Formatı
+─────────────
+  🟢 BIST AI SİNYALİ
+  📊 Hisse: THYAO
+  💰 Güncel Fiyat: ₺182.50
+  🎯 AI Tahmini: ₺190.00 ▲ %4.11
+  📈 Sinyal: BUY
+  🧠 Model Güveni: %85
+  ⚠️ Bu mesaj yatırım tavsiyesi değildir.
+
+Changelog
+─────────
+- v8.09.01: Module docstring eklendi (Sprint 3)
+- v8.07.00: OpportunityScanner Telegram entegrasyonu
+- v8.05.00: İlk Telegram notifier implementasyonu
+"""
 import os
 import httpx
 import logging

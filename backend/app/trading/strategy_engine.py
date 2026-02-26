@@ -1,5 +1,55 @@
 """
-Strateji Motoru V2 — AI, İndikatör ve Hibrit strateji desteği.
+BIST AI Trading — Strategy Engine V2 (v8.09)
+═════════════════════════════════════════════
+
+3 modlu strateji değerlendirme motoru: AI Sadece, İndikatör Sadece, Hibrit.
+Her mod farklı sinyal kaynaklarını kullanarak BUY/SELL/HOLD kararı üretir.
+
+Veri Yapıları
+─────────────
+IndicatorSet (dataclass — 14 alan):
+  rsi, ai_prob, momentum, macd, macd_signal, macd_hist,
+  sma_20, sma_50, ema_12, ema_26, bb_upper, bb_lower,
+  current_price, volume_ratio
+
+StrategyResult (dataclass):
+  signal (BUY/SELL/HOLD), confidence (0-1), reasons (list[str]),
+  strategy_type (ai_only/indicator/hybrid/manual),
+  indicators_snapshot (dict — UI'da gösterilir)
+
+Strateji Modları
+────────────────
+1. evaluate_ai_only(indicators, min_confidence=0.75)
+   - AI olasılık ≥ eşik + momentum yönü → BUY/SELL
+   - Yetersiz olasılık → HOLD
+   - Kullanılan alanlar: ai_prob, momentum
+
+2. evaluate_indicator(indicators, rsi_oversold=30, rsi_overbought=70, ...)
+   - 5 teknik kontrol: RSI, MACD crossover, Bollinger Band, Hacim+Momentum, SMA Cross
+   - buy_signals / total_checks oranı ile confidence
+   - ≥3 sinyal veya >%60 oran → BUY/SELL
+   - Kullanılan alanlar: rsi, macd, macd_signal, macd_hist, bb_upper, bb_lower,
+     current_price, volume_ratio, momentum, sma_20, sma_50
+
+3. evaluate_hybrid(indicators, ...)
+   - AI + İndikatör sonuçlarını birleştirir:
+     ✅ Uyumlu: ortalama confidence
+     ⚠️ Tek taraflı: %70 (AI) veya %60 (indicator) discount
+     ❌ Çelişkili: HOLD (confidence=0.3)
+   - reasons: [AI] ve [İNDİKATÖR] prefix'leri ile ayrıştırılır
+
+4. evaluate(indicators) — Geriye uyumluluk: basit RSI+AI+Momentum kombinasyonu
+
+Frontend Entegrasyonu
+─────────────────────
+- TradePage.js: 3 strateji paneli (AI Kararı, İndikatör, Hibrit)
+- indicators_snapshot: JSON olarak UI'a gönderilir, panel içinde gösterilir
+
+Changelog
+─────────
+- v8.09.01: Detaylı module docstring eklendi (Sprint 3)
+- v8.04.00: TradePage strateji panelleri
+- v8.03.00: İlk Strategy Engine V2 implementasyonu (3 mod)
 """
 from dataclasses import dataclass, field
 from typing import Optional

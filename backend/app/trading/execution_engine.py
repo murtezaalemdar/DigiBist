@@ -1,8 +1,60 @@
 """
-Paper/Real emir yönlendirme motoru V2 — PostgreSQL destekli.
-Her emir otomatik olarak 'orders' tablosuna kaydedilir.
-Spread/slippage hesaplama, gelişmiş emir türleri.
-Broker adapter entegrasyonu: gerçek broker bağlıysa emir broker üzerinden yönlendirilir.
+BIST AI Trading — Execution Engine V2 (v8.09)
+═════════════════════════════════════════════
+
+Paper ve Real modda emir yönlendirme, spread/slippage simülasyonu
+ve PostgreSQL'e kalıcı emir kaydı yapan motor.
+
+Mimari
+──────
+  StrategyEngine → RiskEngine.evaluate_signal() → ExecutionEngine.execute()
+      ├─ Paper mode: spread/slippage simülasyonu → DB kayıt
+      └─ Real mode:  broker_manager → aktif broker API → DB kayıt
+
+Spread/Slippage Modeli
+──────────────────────
+- calculate_spread(): BIST ortalama spread %0.05-%0.3 arası (random uniform)
+- calculate_slippage(): Miktar bazlı — büyük emirlerde ek slippage (volume_factor)
+  - base: %0.01-%0.2 + (quantity/10000) * %0.1 (max %50 ek)
+- BUY: fill_price = market + spread/2 + slippage (yukarı kayma)
+- SELL: fill_price = market - spread/2 - slippage (aşağı kayma)
+
+Veri Yapıları
+─────────────
+OrderRecord (dataclass — 22 alan):
+  order_id, symbol, side, quantity, mode (paper/real), requested_price,
+  simulated_fill_price, status (filled/rejected), reason, created_at,
+  V2: order_type (market/limit/stop/trailing), trigger_price, stop_price,
+  take_profit_price, trailing_stop_pct, spread, slippage, slippage_pct,
+  strategy_type, ai_confidence, ai_signal, indicators_snapshot, notes
+
+Broker Entegrasyonu
+───────────────────
+- _route_through_broker(): broker_manager varsa ve connected ise → place_order()
+- Paper broker'da gerçek bağlantı yoktur, None döner
+- Desteklenen broker'lar: IBKR, Matriks, İş Yatırım (BrokerBase subclass)
+- Broker dolum fiyatı gerçek fiyatla güncellenir (broker_fill_price alanı)
+- Hata durumunda simülasyon olarak devam eder (graceful fallback)
+
+PostgreSQL Kaydı
+────────────────
+- save_order_v2(payload)         — orders tablosuna INSERT
+- get_recent_orders_v2(filters)  — filtrelenmiş + sayfalanmış emirler
+- get_trade_stats()              — istatistikler (toplam emir, kazanma oranı, vb.)
+- DB hatası emri engellemez (warning log)
+
+API Entegrasyonu
+────────────────
+- POST /api/trade/manual     → execute() çağırır
+- POST /api/trade/auto/*     → AutoTrader → runner → execute()
+- GET  /api/trade/orders     → recent_orders_paged()
+- GET  /api/trade/stats      → stats()
+
+Changelog
+─────────
+- v8.09.01: Detaylı module docstring eklendi (Sprint 3)
+- v8.05.00: Broker adapter entegrasyonu (IBKR, Matriks, İş Yatırım)
+- v8.04.00: İlk Execution Engine V2 (spread/slippage, PostgreSQL kaydı)
 """
 
 import time
