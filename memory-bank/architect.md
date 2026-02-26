@@ -12,4 +12,6 @@ BIST AI Trading Platform. 4 servisli Docker Compose mimarisi. ML ensemble modell
 4. **Laravel Filament** — Admin panel için ayrı PHP container. Kullanıcı/rol/izin CRUD, hisse yönetimi.
 5. **Ensemble ML (RF + XGB + GB)** — Cross-validation R² bazlı ağırlıklandırma. Negatif R² durumunda eşit ağırlık.
 6. **Risk Engine v2** — Multi-filtre: güven eşiği, CV R², yönsel doğruluk, ATR bazlı SL/TP.
+7. **Prediction Verification System** — stock_forecasts tablosuna 7 doğrulama kolonu. TradingView Scanner API (birincil) + Yahoo Spark (yedek) ile gerçek fiyat karşılaştırması. Yön doğruluğu + fiyat hatası + 0-100 skor. Haftalık trend + sembol sıralaması.
+8. **Dual Signal Display** — AI orijinal sinyal (signal) ve Risk Engine sonucu (risk_signal) ayrı gösterilir. Risk Engine düşük güvenli sinyalleri HOLD'a çevirir (threshold ~%75).
 

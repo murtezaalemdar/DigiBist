@@ -32,3 +32,8 @@
 | 2026-02-24 | Kelly DrillDown: Investopedia → Modal rapor | Kelly kutusuna tıklayınca dış link yerine detaylı rapor gösterilmeli. formül hesaplama, strateji istatistikleri, gauge, risk limitleri + Investopedia link altta |
 | 2026-02-24 | Backend: systemd servisi (digibist-backend.service) | `systemctl restart digibist-backend` kullanılmalı. fuser/pkill kullanmak systemd ile çakışma yaratır. Servis otomatik restart yapıyor |
 | 2026-02-24 | Frontend deploy: eski JS bundle temizliği | Birden fazla main.*.js birikiyordu sunucuda. Deploy öncesi `rm -f ...main.*.js` ile temizlenmeli. Tarayıcı cache'den eski bundle'ı yükleyebilir |
+| 2026-02-26 | v8.09.00 AI Tahmin Geçmişi Sayfası | Kullanıcı isteği: AI tahminlerinin geçmişi görülsün, detaylı/şık/anlaşılır olsun. 3 sekmeli sayfa: Genel Bakış (gauge + bar chart), Tahmin Geçmişi (11 kolon tablo), Sıralama (best/worst) |
+| 2026-02-26 | Prediction verification TradingView (yfinance değil) | Proje TradingView Scanner API kullanıyor (live_price_provider.py). verify_predictions() başlangıçta yfinance kullanıyordu, TradingView batch + Yahoo Spark fallback olarak değiştirildi |
+| 2026-02-26 | Auth token key: bist_token | PredictionHistoryPage başlangıçta localStorage.getItem('token') kullanıyordu ama gerçek key 'bist_token'. useAuth() hook'undaki authFetch kullanılarak 401 hatası çözüldü |
+| 2026-02-26 | Dual signal display (AI + Risk) | Frontend risk_signal  || signal gösteriyordu → hep HOLD. Çözüm: AI Sinyal (orijinal BUY/SELL) + Risk Sonuç (risk_signal) ayrı kolonlarda. ⚠ uyarı ikonu farklılıkta |
+| 2026-02-26 | Skor hesaplama: yön 50 + hassasiyet 50 | Yön doğruysa +50 puan, fiyat hassasiyetine göre 0-50 bonus (price_error_pct * 5 çıkarılır). Max 100 puan |

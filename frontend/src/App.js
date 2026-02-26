@@ -14,6 +14,7 @@ import SettingsPage from './pages/SettingsPage';
 import TradePage from './pages/TradePage';
 import DashboardPage from './pages/DashboardPage';
 import UserManagementPage from './pages/UserManagementPage';
+import PredictionHistoryPage from './pages/PredictionHistoryPage';
 
 /* ─── Erişim Engeli Bileşeni ─── */
 const AccessDenied = ({ pageName }) => (
@@ -37,6 +38,7 @@ const PAGE_PERMISSIONS = {
   settings: 'settings.view',
   trade: 'trade.view',
   users: 'users.view',
+  predictions: 'predictions.view',
 };
 
 const PAGE_NAMES = {
@@ -46,6 +48,7 @@ const PAGE_NAMES = {
   settings: 'Ayarlar',
   trade: 'İşlem',
   users: 'Kullanıcı Yönetimi',
+  predictions: 'AI Tahminleri',
 };
 
 /* ─── Ana Uygulama ─── */
@@ -390,6 +393,11 @@ const AppContent = () => {
               {activePage === 'users' && (
                 (!user || !hasPermission('users.view')) ? <AccessDenied pageName={PAGE_NAMES.users} /> :
                 <UserManagementPage />
+              )}
+
+              {activePage === 'predictions' && (
+                (!user || !hasPermission('predictions.view')) ? <AccessDenied pageName={PAGE_NAMES.predictions} /> :
+                <PredictionHistoryPage />
               )}
 
               {activePage === 'dashboard' && (

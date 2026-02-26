@@ -10,6 +10,7 @@ güvenilir AL/SAT/TUT sinyalleri üretir. Risk Engine düşük güvenli sinyalle
 
 - **AI Teknik Analiz**: 43+ indikatör, ensemble ML, Walk-Forward CV
 - **Sinyal Üretimi**: BUY/SELL/HOLD + confidence score + risk filtresi
+- **AI Tahmin Geçmişi & Doğruluk Analizi**: Tahmin doğrulama (TradingView fiyat), yön doğruluğu gauge, sinyal başarı oranları, haftalık trend, sembol sıralaması
 - **Kelly Criterion Pozisyon Boyutlandırma**: Half-Kelly, detaylı rapor paneli
 - **RSI Divergence Algılama**: Bullish/bearish uyumsuzluk tespiti, görsel gösterim
 - **Fırsat Tarayıcı**: 11 fırsat tipi, otomatik tarama, Telegram + browser bildirim
@@ -41,7 +42,8 @@ güvenilir AL/SAT/TUT sinyalleri üretir. Risk Engine düşük güvenli sinyalle
 
 ## Versiyon Geçmişi (Son)
 
-- v8.08.00 (aktif): RSI Divergence + Kelly DrillDown + Bug Fixler
+- v8.09.00 (aktif): AI Tahmin Geçmişi & Doğruluk Analizi Sayfası
+- v8.08.00: RSI Divergence + Kelly DrillDown + Bug Fixler
 - v8.07.00: Fırsat Bildirim Sistemi (Opportunity Scanner)
 - v8.06.02: 14 Bug Fix Release
 - v8.06: Interval Butonları + BIST100 Endeks + Sidebar Filtre

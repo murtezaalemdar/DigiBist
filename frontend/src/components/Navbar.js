@@ -18,6 +18,7 @@ import {
   Menu,
   TrendingUp,
   TrendingDown,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import NotificationBell from './NotificationBell';
@@ -48,6 +49,7 @@ const Navbar = ({ activePage, setActivePage, searchQuery, setSearchQuery, wsConn
   const allTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard.view' },
     { id: 'portfolio', label: 'Portföy', icon: Briefcase, perm: 'portfolio.view' },
+    { id: 'predictions', label: 'AI Tahminleri', icon: Target, perm: 'predictions.view' },
     { id: 'models', label: 'ML Modelleri', icon: Cpu, perm: 'models.view' },
     { id: 'settings', label: 'Ayarlar', icon: Settings, perm: 'settings.view' },
     { id: 'trade', label: 'İşlem', icon: Activity, perm: 'trade.view' },

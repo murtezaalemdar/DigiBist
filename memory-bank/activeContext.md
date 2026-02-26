@@ -1,22 +1,24 @@
-# Active Context — 24 Şubat 2026
+# Active Context — 26 Şubat 2026
 
 ## Current Goals
 
-- ## Aktif Çalışma - v8.08.00 Geliştirme (RSI Divergence + Kelly DrillDown)
-- ### Son Durum
-- - RSI Divergence algılama ve görselleştirme tamamlandı (backend + frontend)
-- - Kelly Criterion tıklandığında detaylı rapor gösterimi eklendi (DrillDownModal)
-- - React Error #310 düzeltildi (useMemo hooks sırası)
-- - Login z-index sorunu düzeltildi (Navbar relative z-10)
+- ## Son Durum — v8.09.00 AI Tahmin Geçmişi & Doğruluk Analizi (TAMAMLANDI)
+- ### Yapılan İşler
+- - AI tahmin geçmişi sayfası eklendi (PredictionHistoryPage.js — 736 satır)
+- - Backend: 7 verification kolonu + 6 CRUD fonksiyonu + 5 API endpoint
+- - Frontend: 3 sekmeli sayfa (Genel Bakış, Tahmin Geçmişi, Sıralama)
+- - Auth token bug fix: localStorage.getItem('token') → useAuth().authFetch
+- - yfinance → TradingView migration: verify_predictions() TradingView Scanner API kullanıyor
+- - HOLD sinyal bug fix: AI Sinyal ve Risk Sonuç ayrı kolonlarda gösteriliyor
 - - Tüm değişiklikler production'a deploy edildi ve test edildi
-- - API testi: GARAN (1 bearish div), THYAO (2 bearish div), FROTO 1y (bullish+bearish)
 - ### Deployment Bilgileri
 - - Server: Ubuntu 24.04, 192.168.0.28, SSH root erişimi
 - - Backend: /opt/digibist/backend/ — `systemctl restart digibist-backend` ile yönetilir
 - - Frontend: /opt/digibist/frontend/build/ (Nginx, port 80)
 - - Database: PostgreSQL localhost:5432/bist_trading
-- - Git: son commit d46274e (v8.07.00), yeni değişiklikler henüz commit edilmedi
+- - DB'de 233 tahmin var (63 BUY + 170 SELL), henüz 0 doğrulanmış
 - ### Bilinen Sorunlar (Düşük Öncelik)
+- - Risk Engine güven eşiği %75 → neredeyse tüm sinyaller HOLD'a dönüyor (confidence ort. %48)
 - - Hardcoded DB password/JWT secret (env vars kullanılmalı)
 - - SSL verification disabled in live_price_provider.py
 - - Race conditions in risk_engine class variables
@@ -35,7 +37,7 @@ Proje Ubuntu 24.04 sunucuda (192.168.0.28) native çalışıyor (Docker'sız):
 - **digibist-backend** — systemd servisi (`digibist-backend.service`), FastAPI + uvicorn 4 workers, port 8000
 - **Nginx** — React build serve, port 80
 - **Filament Admin** — port 8001 (ayrı Laravel)
-- **Versiyon**: v8.07.00 (RSI Divergence + Kelly DrillDown deployed ama versiyon henüz bump edilmedi)
+- **Versiyon**: v8.09.00 (Tahmin Geçmişi & Doğruluk Analizi deployed)
 
 ## ⚠️ KRİTİK: Backend Yönetimi
 - Backend `digibist-backend.service` systemd servisi ile yönetilir
@@ -44,6 +46,34 @@ Proje Ubuntu 24.04 sunucuda (192.168.0.28) native çalışıyor (Docker'sız):
 - **ASLA** `fuser -k` veya `pkill` kullanma — systemd otomatik yeniden başlatır ve çakışma yaratır
 
 ## Son Yapılan İşler
+
+### v8.09 — AI Tahmin Geçmişi & Doğruluk Analizi (26 Şubat 2026)
+1. **Tahmin Doğrulama Sistemi (Backend — database.py)**
+   - `stock_forecasts` tablosuna 7 yeni kolon: actual_price, actual_change_pct, is_direction_correct, price_error_pct, prediction_score, verified, verified_at
+   - `migrate_prediction_verification()` — startup'ta idempotent migration + permissions
+   - `verify_predictions()` — TradingView Scanner API (birincil), Yahoo Spark (yedek)
+     - Tüm sembollerin fiyatını tek seferde çeker (batch)
+     - Yön doğruluğu + fiyat hatası + 0-100 skor hesaplaması
+   - `get_prediction_history()` — filtreli (sembol, sinyal, tarih) + sayfalı
+   - `get_prediction_accuracy_stats()` — toplam, doğrulanmış, sinyal bazlı breakdown
+   - `get_prediction_accuracy_timeline()` — haftalık trend (12 hafta)
+   - `get_prediction_leaderboard()` — sembol bazlı en iyi/en kötü sıralama
+2. **API Endpoints (Backend — main.py)**
+   - `GET /api/predictions/history` — filtreli tahmin geçmişi
+   - `POST /api/predictions/verify` — tahminleri doğrula (lookback_hours: 72)
+   - `GET /api/predictions/accuracy` — doğruluk istatistikleri
+   - `GET /api/predictions/accuracy-timeline` — haftalık trend
+   - `GET /api/predictions/leaderboard` — sembol sıralaması
+3. **PredictionHistoryPage.js (Frontend — 736 satır)**
+   - **Genel Bakış** sekmesi: SVG dairesel gauge (yön doğruluğu), sinyal başarı çubukları (BUY/SELL), haftalık mini bar chart, özet kartlar (6 adet), ek istatistikler (4 adet)
+   - **Tahmin Geçmişi** sekmesi: 11 kolonlu tablo (Sembol, AI Sinyal, Risk Sonuç, Mevcut/Tahmin/Gerçek Fiyat, Değişim, Güven, Yön, Skor, Tarih), filtreleme (sembol + sinyal + doğrulanmış), sayfalama
+   - **Sıralama** sekmesi: En başarılı (yeşil) + iyileştirilmesi gereken (kırmızı) iki panel
+   - "Tahminleri Doğrula" butonu: POST /api/predictions/verify tetikler
+   - **useAuth().authFetch** kullanılır (401 bug fix)
+4. **Bug Fix'ler**
+   - Auth token: `localStorage.getItem('token')` → `useAuth().authFetch` (token key: `bist_token`)
+   - yfinance → TradingView: verify_predictions() artık TradingView Scanner + Yahoo Spark kullanıyor
+   - HOLD sinyal: risk_signal hep HOLD gösteriyordu → AI Sinyal + Risk Sonuç ayrı kolonlar
 
 ### v8.08 — RSI Divergence + Kelly DrillDown + Bug Fix'ler (24 Şubat 2026)
 1. **RSI Bullish/Bearish Divergence Algılama (Backend)**

@@ -23,6 +23,9 @@
 - **Dual Y-axis Charts**: RSI/MACD/Hacim grafiklerinde sol eksen metrik, sağ eksen fiyat (₺)
 - **RSI Divergence Detection**: Swing low/high + dedup + bullish/bearish divergence karşılaştırması
 - **DrillDown Modal pattern**: Her metrik (directional, cv_r2, rsi, features, training, kelly) için ayrı detail component
+- **Prediction Verification pattern**: TradingView Scanner API ile batch fiyat çekme → verify_predictions() ile karşılaştırma → Yön doğruluğu + fiyat hatası + 0-100 skor hesaplama
+- **Dual Signal Display**: AI sinyal (signal field) vs Risk Engine sonucu (risk_signal field) ayrı kolonlarda gösterilir. Risk Engine neredeyse tüm sinyalleri HOLD'a dönüştürüyor (confidence avg %48, threshold %75)
+- **Auth pattern**: useAuth() hook → authFetch() fonksiyonu. Token key: `bist_token` (localStorage). Tüm API çağrılarında `Authorization: Bearer token` otomatik eklenir
 - **React Hooks kuralı**: useMemo/useEffect vb. hooklar EARLY RETURN'DAN ÖNCE olmalı (Error #310 önlenir)
 
 ## Deploy Patterns
@@ -95,6 +98,11 @@ ssh root@192.168.0.28 "tail -20 /var/log/nginx/error.log"
 - `POST /api/alerts/read-all` — Tüm bildirimleri okundu işaretle
 - `DELETE /api/alerts` — Tüm bildirimleri temizle
 - `GET /api/alerts/status` — Fırsat tarayıcı durumu
+- `GET /api/predictions/history` — Filtreli tahmin geçmişi (sembol, sinyal, tarih, sayfalama)
+- `POST /api/predictions/verify` — Tahminleri TradingView fiyatları ile doğrula
+- `GET /api/predictions/accuracy` — Genel doğruluk istatistikleri (sinyal bazlı breakdown)
+- `GET /api/predictions/accuracy-timeline` — Haftalık doğruluk trendi (12 hafta)
+- `GET /api/predictions/leaderboard` — Sembol bazlı başarı sıralaması
 
 ## AI Forecast Response drill_down Object
 

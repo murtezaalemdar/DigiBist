@@ -50,6 +50,14 @@ from app.core.database import (
     get_trade_stats,
     get_recent_orders_v2,
 )
+from app.core.database import (
+    migrate_prediction_verification,
+    get_prediction_history,
+    verify_predictions,
+    get_prediction_accuracy_stats,
+    get_prediction_accuracy_timeline,
+    get_prediction_leaderboard,
+)
 from app.core.live_price_provider import fetch_live_prices, get_provider_stats
 import asyncio
 import time
@@ -1274,13 +1282,103 @@ async def home():
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 7) TAHMİN GEÇMİŞİ & DOĞRULUK ANALİZİ API (v8.09.00 — 26 Şubat 2026)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# AI modelinin ürettiği tahminlerin gerçek piyasa verileriyle doğrulanması
+# ve başarı oranlarının izlenmesi için 5 endpoint.
+#
+# Frontend: PredictionHistoryPage.js (3 sekmeli sayfa)
+#   - Genel Bakış  → /accuracy + /accuracy-timeline
+#   - Tahmin Geçmişi → /history (filtreli + sayfalı tablo)
+#   - Sıralama      → /leaderboard (en iyi/en kötü semboller)
+#   - "Tahminleri Doğrula" butonu → POST /verify
+#
+# Doğrulama: TradingView Scanner API (birincil) + Yahoo Spark (yedek)
+# Auth: Tüm endpoint'ler require_auth ile korunur (JWT Bearer token)
+#
+# İlgili DB fonksiyonları: database.py → verify_predictions(),
+#   get_prediction_history(), get_prediction_accuracy_stats(),
+#   get_prediction_accuracy_timeline(), get_prediction_leaderboard()
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/predictions/history")
+async def predictions_history(
+    limit: int = 50,
+    offset: int = 0,
+    symbol: str = None,
+    signal: str = None,
+    verified_only: bool = False,
+    date_from: str = None,
+    date_to: str = None,
+    user: UserInfo = Depends(require_auth),
+):
+    """
+    Tahmin geçmişini filtreli ve sayfalı getir.
+    Frontend: PredictionHistoryPage.js → Tahmin Geçmişi sekmesi.
+    Filtreler: sembol, sinyal tipi, tarih aralığı, sadece doğrulanmış.
+    """
+    data, total = await get_prediction_history(
+        limit=limit, offset=offset, symbol=symbol, signal=signal,
+        verified_only=verified_only, date_from=date_from, date_to=date_to,
+    )
+    return {"predictions": data, "total": total, "limit": limit, "offset": offset}
+
+
+@app.post("/api/predictions/verify")
+async def predictions_verify(
+    payload: dict = None,
+    user: UserInfo = Depends(require_auth),
+):
+    """
+    Doğrulanmamış tahminleri TradingView/Yahoo gerçek fiyatlarıyla doğrula.
+    Frontend: 'Tahminleri Doğrula' butonu (lookback_hours: 72 saat).
+    Veri kaynağı: TradingView Scanner API (birincil) + Yahoo Spark (yedek).
+    Not: Borsa saatleri dışında son kapanış fiyatı kullanılır.
+    """
+    lookback = 72
+    if payload and "lookback_hours" in payload:
+        lookback = int(payload["lookback_hours"])
+    result = await verify_predictions(lookback_hours=lookback)
+    return result
+
+
+@app.get("/api/predictions/accuracy")
+async def predictions_accuracy(user: UserInfo = Depends(require_auth)):
+    """
+    Genel tahmin doğruluk istatistikleri.
+    Frontend: Genel Bakış sekmesi — gauge'ler, özet kartlar, sinyal başarı çubukları.
+    """
+    return await get_prediction_accuracy_stats()
+
+
+@app.get("/api/predictions/accuracy-timeline")
+async def predictions_accuracy_timeline(weeks: int = 12, user: UserInfo = Depends(require_auth)):
+    """
+    Haftalık tahmin doğruluk trendi (son 12 hafta).
+    Frontend: Genel Bakış sekmesi — MiniBarChart.
+    """
+    return await get_prediction_accuracy_timeline(weeks=weeks)
+
+
+@app.get("/api/predictions/leaderboard")
+async def predictions_leaderboard(limit: int = 20, user: UserInfo = Depends(require_auth)):
+    """
+    Sembol bazında tahmin başarı sıralaması.
+    Frontend: Sıralama sekmesi — en başarılı (yeşil) + iyileştirilmesi gereken (kırmızı).
+    """
+    return await get_prediction_leaderboard(limit=limit)
+
+
 # ─────────────────────────────────────────────
-# 7) BROKER YÖNETİMİ API
+# 8) BROKER YÖNETİMİ API
 # ─────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup_initialize_broker():
     """Uygulama başlangıcında varsayılan broker'ı aktifle."""
+    await migrate_prediction_verification()
     await broker_manager.initialize_default()
     logger.info("Broker Manager başlatıldı (Paper Trading varsayılan).")
 

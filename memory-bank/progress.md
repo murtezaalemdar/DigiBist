@@ -1,8 +1,27 @@
-# Progress (Updated: 2026-02-24)
+# Progress (Updated: 2026-02-26)
 
 ## Done
 
-- ✅ v8.08.00 (devam eden) — RSI Divergence + Kelly DrillDown + Bug Fix'ler
+- ✅ v8.09.00 — AI Tahmin Geçmişi & Doğruluk Analizi Sayfası (26 Şubat 2026)
+  - Backend: `database.py` — 7 yeni kolon (actual_price, actual_change_pct, is_direction_correct, price_error_pct, prediction_score, verified, verified_at)
+  - Backend: `database.py` — `migrate_prediction_verification()` idempotent migration + `predictions.view` izni
+  - Backend: `database.py` — `verify_predictions()` TradingView Scanner API (birincil) + Yahoo Spark API (yedek) ile doğrulama
+  - Backend: `database.py` — `get_prediction_history()` filtreli + sayfalı tahmin geçmişi
+  - Backend: `database.py` — `get_prediction_accuracy_stats()` genel doğruluk istatistikleri (sinyal bazlı breakdown)
+  - Backend: `database.py` — `get_prediction_accuracy_timeline()` haftalık doğruluk trendi
+  - Backend: `database.py` — `get_prediction_leaderboard()` sembol bazlı en iyi/en kötü sıralama
+  - Backend: `main.py` — 5 yeni API endpoint (/api/predictions/*)
+  - Frontend: `PredictionHistoryPage.js` (736 satır) — 3 sekmeli tam sayfa
+    - Genel Bakış: SVG dairesel gauge'ler, sinyal başarı çubukları, haftalık trend grafiği
+    - Tahmin Geçmişi: Filtrelenebilir + sayfalı tablo (11 kolon: AI Sinyal + Risk Sonuç ayrı)
+    - Sıralama: En iyi/en kötü tahmin edilen semboller
+  - Frontend: `App.js` — PredictionHistoryPage import + PAGE_PERMISSIONS entegrasyonu
+  - Frontend: `Navbar.js` — Target ikonu + "AI Tahminleri" tab eklendi
+  - Bug Fix: Auth token — `localStorage.getItem('token')` → `useAuth().authFetch` (401 hata düzeltildi)
+  - Bug Fix: yfinance → TradingView migration — doğrulama işlevi TradingView Scanner API kullanır
+  - Bug Fix: HOLD sinyal gösterimi — dual kolon (AI Sinyal + Risk Sonuç) ile risk_signal/signal ayrı gösterilir
+  - Deploy: Backend + Frontend production'a deploy edildi (SCP + systemctl restart)
+- ✅ v8.08.00 — RSI Divergence + Kelly DrillDown + Bug Fix'ler
   - Backend: RSI bullish/bearish divergence algılama algoritması (`/api/ai-chart-data/{symbol}`)
     - Swing low/high detection (lookback=5), dedup (3 bar mesafe), min_distance=5
     - API response: `bullishDiv`/`bearishDiv` per record + `divergences` array
@@ -36,11 +55,12 @@
 
 ## Doing
 
-- Git commit & push v8.08.00 değişiklikleri
-- Versiyon bump (config.js v8.07.00 → v8.08.00)
+- (Şu an aktif geliştirme yok — tüm özellikler deployed)
 
 ## Next
 
+- Tahminleri doğrula butonu test edilmeli (borsa saatlerinde TradingView verileri)
+- Risk Engine güven eşiği %75 → daha düşük ayarlanabilir (neredeyse tüm sinyaller HOLD'a dönüyor)
 - Divergence algoritma parametreleri kullanıcı ayarlarına taşınabilir
 - Portföy değeri kullanıcı bazlı yapılabilir (şu an sabit 250.000₺)
 - GPU kurulum sonrası model performans testi
