@@ -1,3 +1,38 @@
+"""
+models.py — Trading API Pydantic Şemaları
+═══════════════════════════════════════════
+
+FastAPI endpoint'lerinde istek/yanıt doğrulaması için kullanılan
+tüm Pydantic BaseModel ve Enum tanımları.
+
+Enum'lar:
+  - Side            : BUY | SELL
+  - Mode            : paper | real
+  - OrderType       : market, limit, stop_loss, take_profit, trailing_stop
+  - StrategyType    : manual, ai_only, indicator, hybrid
+  - ConditionalOrderStatus : pending, triggered, filled, cancelled
+
+Request Modelleri:
+  - ManualOrderRequest     : Manuel emir gönderimi (sembol, miktar, yön, strateji)
+  - ConditionalOrderRequest: Koşullu emir (limit/stop fiyat, trailing %)
+  - AutoTradeConfig        : Otomatik trading ayarları (semboller, strateji, risk limitleri)
+  - LoginRequest           : JWT giriş (kullanıcı adı + şifre)
+
+Response Modelleri:
+  - TokenResponse          : JWT token + kullanıcı bilgisi
+  - UserInfo               : Token payload (id, username, role, permissions)
+
+Kullanım:
+  main.py endpoint'lerinde `request: ManualOrderRequest` şeklinde
+  FastAPI otomatik olarak JSON body'yi doğrular.
+
+Değişiklik Geçmişi:
+  v8.04 — İlk oluşturma (Side, Mode, ManualOrderRequest)
+  v8.06 — ConditionalOrderRequest, OrderType, StrategyType eklendi
+  v8.07 — AutoTradeConfig, TokenResponse, UserInfo eklendi
+  v8.09.01 — Modül docstring eklendi
+"""
+
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from enum import Enum

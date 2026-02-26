@@ -1,3 +1,28 @@
+/**
+ * FeaturePopup.js — Gösterge Bilgi Popup'ı
+ * ═══════════════════════════════════════════════
+ *
+ * Dashboard'daki teknik gösterge değerlerine tıklandığında
+ * açılan eğitim amaçlı bilgi popup'ı.
+ *
+ * INDICATOR_INFO sözlüğü:
+ *   Her gösterge için fullName, desc (Türkçe açıklama),
+ *   cat (kategori), fmt (format tipi: price/pct/volume/text)
+ *
+ * Kapsanan Göstergeler:
+ *   - Fiyat     : Open, High, Low, Volume
+ *   - Trend     : SMA_5/10/20/50, EMA_12/26
+ *   - Momentum  : RSI_14, MACD, MACD_Signal, MACD_Hist, Stochastic_K/D
+ *   - Volatilité: Bollinger Üst/Alt Bant, BB_Width, ATR_14
+ *   - Hacim     : OBV, Volume_Ratio, VWAP
+ *   - AI        : AI_Probability, Risk_Score, Target_Price vb.
+ *
+ * Props: isOpen, onClose, featureName (string), value (number/string)
+ *
+ * @module FeaturePopup
+ * @version 8.09.01
+ */
+
 import React from 'react';
 import { X, TrendingUp, BarChart2, Info } from 'lucide-react';
 

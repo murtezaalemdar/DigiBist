@@ -1,7 +1,27 @@
-# Progress (Updated: 2026-02-26)
+# Progress (Updated: 2026-02-27)
 
 ## Done
 
+- ✅ v8.09.01 — Tüm Proje Dokümantasyonu & Detaylı Kod Yorumları Sprint'i (26–27 Şubat 2026)
+  - Backend: `model.py` — 60+ satır module docstring (mimari, veri kaynakları, 50 özellik, 14 adımlı akış, performans)
+  - Backend: `database.py` — 40+ satır module docstring (bağlantı, ORM, fonksiyon grupları, tablo yapısı, changelog)
+  - Backend: `main.py` — 30 satır module docstring + 18 numaralı section header (1-8)
+  - Backend: `ws_manager.py` — 20 satır module + class docstring (multi-worker uyarısı)
+  - Backend: `models.py` (trading) — 30+ satır module docstring (Enum + Request/Response modelleri, changelog)
+  - Frontend: `App.js` — 35 satır JSDoc (yapı, sayfalar, hook'lar, izin sistemi)
+  - Frontend: `config.js` — Tam yeniden yazım + versiyon bump v8.07→v8.09.01
+  - Frontend: `Navbar.js` — 35 satır JSDoc (responsive, tab, login, prop'lar)
+  - Frontend: `DashboardPage.js` — 30 satır JSDoc (6 bölüm, prop'lar, API, alt bileşenler)
+  - Frontend: `TradePage.js` — 35 satır JSDoc (6 bölüm, 7 API endpoint, ~1320 satır)
+  - Frontend: `PortfolioPage.js` — 20 satır JSDoc (favori + tam liste, prop'lar)
+  - Frontend: `ModelsPage.js` — 20 satır JSDoc (6 ML/sistem kartı)
+  - Frontend: `SettingsPage.js` — 25 satır JSDoc (broker, borsa, API key, hız, WS)
+  - Frontend: `UserManagementPage.js` — 30 satır JSDoc (CRUD, rol, izin, 7 API endpoint)
+  - Frontend: `DrillDownModal.js` — 20 satır JSDoc (7 drill-down görünüm tipi)
+  - Frontend: `AnalysisChartModal.js` — 22 satır JSDoc (Recharts, 13 zaman aralığı, 7 gösterge)
+  - Frontend: `FeaturePopup.js` — 22 satır JSDoc (INDICATOR_INFO sözlüğü, 6 kategori)
+  - Memory Bank: progress.md, activeContext.md güncellendi
+  - Git commit + GitHub push + lokal zip yedek
 - ✅ v8.09.00 — AI Tahmin Geçmişi & Doğruluk Analizi Sayfası (26 Şubat 2026)
   - Backend: `database.py` — 7 yeni kolon (actual_price, actual_change_pct, is_direction_correct, price_error_pct, prediction_score, verified, verified_at)
   - Backend: `database.py` — `migrate_prediction_verification()` idempotent migration + `predictions.view` izni
@@ -55,7 +75,7 @@
 
 ## Doing
 
-- (Şu an aktif geliştirme yok — tüm özellikler deployed)
+- Yedek alınıyor: Git commit + GitHub push + lokal zip
 
 ## Next
 

@@ -1,3 +1,26 @@
+/**
+ * DrillDownModal.js — AI Tahmin Detay Modalı
+ * ═══════════════════════════════════════════════
+ *
+ * Dashboard'daki AI tahmin kartlarına tıklandığında açılan
+ * detaylı drill-down analiz modalı. API'den gelen drill_down
+ * objesini görselleştirir.
+ *
+ * Görünümler (type parametresine göre):
+ *   - directional : Yön tahmini detayı (model ağırlıkları, özellik önemi)
+ *   - cv_r2       : Cross-validation & R² skoru detayı
+ *   - rsi         : RSI analizi (aşırı alım/satım zonları)
+ *   - indicators  : Tüm teknik göstergeler özeti
+ *   - features    : Özellik önemi sıralaması (bar grafik)
+ *   - risk        : Risk analizi (Monte Carlo, VaR, CVaR, max drawdown)
+ *   - stop_levels : Stop-loss / take-profit seviyeleri
+ *
+ * Props: isOpen, onClose, type (string), data (forecast objesi)
+ *
+ * @module DrillDownModal
+ * @version 8.09.01
+ */
+
 import React from 'react';
 import { X, TrendingUp, BarChart3, Activity, Settings, Database, Target, ExternalLink } from 'lucide-react';
 

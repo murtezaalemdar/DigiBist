@@ -1,3 +1,36 @@
+/**
+ * TradePage.js — İşlem Merkezi (Trading Center)
+ * ═══════════════════════════════════════════════════════════
+ *
+ * BIST100 hisseleri için kapsamlı emir yönetimi sayfası.
+ * En büyük ve en karmaşık frontend bileşeni (~1320 satır).
+ *
+ * Bölümler:
+ *   - StockDropdown      : Aranabilir, çoklu seçim destekli dropdown
+ *   - Manuel Emir Formu  : Market/Limit/Stop-Loss, miktar, fiyat, AL/SAT
+ *   - Koşullu Emir Formu : Take-profit, trailing-stop, tetikleme koşulu
+ *   - Otomatik Trading   : AI tabanlı otomatik al/sat başlat/durdur
+ *   - Emir Geçmişi      : Filtrelenebilir tablo (durum, sembol, tarih, P&L)
+ *   - İstatistikler       : Toplam işlem, başarı oranı, toplam kâr/zarar
+ *
+ * API Endpoint'leri:
+ *   POST /api/order/execute        — Manuel emir
+ *   POST /api/order/conditional    — Koşullu emir
+ *   GET  /api/order/conditional    — Koşullu emir listesi
+ *   DEL  /api/order/conditional/:ref — Koşullu emir iptal
+ *   GET  /api/order/history        — Emir geçmişi (sayfalama)
+ *   GET  /api/trade/stats          — Trading istatistikleri
+ *   POST /api/auto-trade/start|stop|run-once — Oto-trade
+ *
+ * Props:
+ *   stocks, livePrices, authFetch, selectedSymbol, setSelectedSymbol,
+ *   setActivePage
+ *
+ * @module TradePage
+ * @version 8.09.01
+ * @since 8.04
+ */
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ShieldCheck, Bot, FileText, Activity, Search, X, ChevronDown,

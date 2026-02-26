@@ -1,5 +1,32 @@
+/**
+ * SettingsPage.js — Sistem Ayarları ve Broker Yönetimi
+ * ════════════════════════════════════════════════════════════
+ *
+ * Broker bağlantıları, borsa seçimi, API key yönetimi ve
+ * ticker hızı gibi uygulama geneli ayarları yönetir.
+ *
+ * Bölümler:
+ *   - Broker Listesi     : Paper, IBKR, Matriks, İş Yatırım kartları
+ *   - Borsa Seçimi       : BIST, NYSE, NASDAQ (bayrak + para birimi)
+ *   - API Key Yapılandırma: Broker başına genellenebilir config formu
+ *   - Canlı Fiyat Hızı  : Ticker animasyon hızı slider
+ *   - WebSocket Durumu   : Bağlantı göstergesi
+ *
+ * API:
+ *   GET  /api/broker/list     — Broker listesi
+ *   POST /api/broker/connect  — Broker aktifle
+ *   POST /api/broker/config   — Broker config kaydet
+ *
+ * Props:
+ *   wsConnected, stocks, livePrices, favorites,
+ *   tickerSpeed, setTickerSpeed, brokerStatus, setBrokerStatus
+ *
+ * @module SettingsPage
+ * @version 8.09.01
+ * @since 8.05
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import {
   BrainCircuit,
   Settings,
   Activity,

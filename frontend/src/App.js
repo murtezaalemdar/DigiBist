@@ -1,3 +1,39 @@
+/**
+ * DigiBist — Ana Uygulama Bileşeni (App.js)
+ * ════════════════════════════════════════════
+ *
+ * React SPA'nın root bileşeni. Tüm sayfa yönlendirmesini, authentication'u
+ * ve layout'u yönetir.
+ *
+ * YAPI:
+ *   AuthProvider          : JWT Context — tüm child'lara token/user/permissions sağlar
+ *   AppContent            : Ana içerik — login ekranı veya dashboard shell
+ *   activePage state      : Sayfa yönlendirme (‘dashboard’|‘portfolio’|‘models’|‘trade’|...)
+ *   PAGE_PERMISSIONS      : Her sayfa için gereken izin (orn: 'dashboard.view')
+ *
+ * SAYFALAR:
+ *   DashboardPage         : Ana dashboard (AI tahminler + fiyat + teknik göstergeler)
+ *   PortfolioPage         : Portföy yönetimi (paper/real)
+ *   ModelsPage            : ML model performansı
+ *   TradePage             : Manuel/otomatik işlem
+ *   PredictionHistoryPage : AI tahmin geçmişi & doğruluk analizi (v8.09)
+ *   SettingsPage          : Uygulama ayarları
+ *   UserManagementPage    : Kullanıcı/izin yönetimi (admin)
+ *
+ * HOOKS:
+ *   useAuth()             : JWT login/logout/authFetch/hasPermission
+ *   useWebSocket()        : Gerçek zamanlı fiyat akışı (WS MARKET_UPDATE)
+ *   useNotifications()    : Fırsat bildirimleri (WS + polling + Browser API)
+ *
+ * LAYOUT:
+ *   Sticky header (Navbar + LiveTicker) + Sidebar (sol) + Ana içerik
+ *   Responsive: Mobil'de Sidebar gizlenir, Navbar hamburger menü gösterir
+ *
+ * İZİN SİSTEMİ:
+ *   Her sayfa PAGE_PERMISSIONS'da tanımlı bir izin gerektirir.
+ *   Kullanıcının izni yoksa AccessDenied bileşeni render edilir.
+ *   İzinler backend'den JWT payload ile gelir, useAuth() cache'ler.
+ */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BrainCircuit, ShieldX } from 'lucide-react';
 

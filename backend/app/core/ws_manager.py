@@ -1,3 +1,26 @@
+"""
+DigiBist — WebSocket Bağlantı Yöneticisi (ConnectionManager)
+═════════════════════════════════════════════════════
+
+FastAPI WebSocket bağlantılarını yöneten Singleton manager.
+main.py'den `from app.core.ws_manager import manager` ile kullanılır.
+
+AMAÇ:
+  - Frontend React client'ları WS üzerinden gerçek zamanlı fiyat akışı alır
+  - MARKET_UPDATE mesajları tüm bağlı client'lara broadcast edilir
+  - OPPORTUNITY_ALERT mesajları opportunity_scanner tarafından tetiklenir
+
+KULLANIM:
+  await manager.connect(websocket)     # client bağlandı
+  manager.disconnect(websocket)        # client ayrıldı
+  await manager.broadcast({...})       # tüm client'lara mesaj gönder
+
+NOTLAR:
+  - Broadcast sırasında bağlantı kopmuş client'lar otomatik temizlenir
+  - active_connections list'i in-memory tutulur (worker başına ayrı)
+  - 4 uvicorn worker varsa her worker kendi ConnectionManager instance'ına sahiptir
+"""
+
 from fastapi import WebSocket
 from typing import List
 import logging

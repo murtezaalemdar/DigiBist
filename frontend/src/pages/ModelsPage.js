@@ -1,3 +1,24 @@
+/**
+ * ModelsPage.js — ML Modelleri Bilgi Sayfası
+ * ═══════════════════════════════════════════════
+ *
+ * Sistemde kullanılan makine öğrenme modellerinin
+ * teknik detaylarını ve performans metriklerini gösterir.
+ *
+ * Kartlar:
+ *   - Random Forest  : 252 günlük veri, RSI/MACD/Bollinger özellikleri, %87 doğruluk
+ *   - XGBoost        : Gradient boosting, SHAP analizi desteği
+ *   - LightGBM       : GPU hızlandırmalı, histogram tabanlı
+ *   - Risk Engine    : Monte Carlo simülasyonu, VaR/CVaR hesaplama
+ *   - WebSocket Durumu: Bağlantı göstergesi ve canlı fiyat sayısı
+ *   - Bildirim Altyapısı: Telegram + tarayıcı bildirim entegrasyonu
+ *
+ * Props: wsConnected, livePrices
+ *
+ * @module ModelsPage
+ * @version 8.09.01
+ */
+
 import React from 'react';
 import {
   BrainCircuit,

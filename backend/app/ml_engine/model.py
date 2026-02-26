@@ -1,3 +1,62 @@
+"""
+DigiBist — AI Tahmin Motoru (BISTAIModel)
+═══════════════════════════════════════════════════════════════════════
+
+BIST100 hisse senetleri için makine öğrenmesi tabanlı fiyat tahmini.
+
+MIMARI:
+  Ensemble model — 3 model ağırlıklı ortalama ile çalışır:
+    1. LightGBM     (histogram-based gradient boosting, ~5-10x hızlı)
+    2. RandomForest  (sklearn, fallback / baseline)
+    3. XGBoost       (opsiyonel, gradient boosting OpenMP)
+
+  LightGBM ve XGBoost opsiyoneldir; sadece RandomForest garanti bulunur.
+  En iyi CV R² skoruna sahip model "primary" olarak seçilir.
+
+VERİ KAYNAKLARI:
+  - yfinance: Günlük OHLCV (2 yıl, ~500 aktif gün)
+  - yfinance (haftalık): Multi-timeframe trend teyidi
+  - yfinance (USDTRY=X): Sentiment proxy — kur korelasyonu
+
+ÖZELLİK SETİ (~50 feature):
+  - Teknik indikatörler: RSI (7,14), MACD, Bollinger Bands, Stochastic, ATR, OBV
+  - Hareketli ortalamalar: SMA (5,10,20,50), EMA (5,10,20,50)
+  - Fiyat türevleri: Return (1d,5d,10d), Volatility (10d,20d)
+  - Cross sinyalleri: SMA 5/10 ve 10/20 golden/death cross
+  - Lag features: Close_Lag_1..5
+  - Zaman: Day_of_Week, Month
+  - Multi-TF: Weekly_Trend, Weekly_RSI, Weekly_Momentum
+  - Sentiment: USDTRY, USDTRY_Return, USDTRY_SMA10, USDTRY_Volatility
+  - Oran: Price_SMA10/20/50_Ratio
+
+AKIŞ (fetch_and_train):
+  1. yfinance → 2y günlük veri indir (thread-safe, retry logic)
+  2. _build_features() → ~50 teknik indikatör hesapla
+  3. _get_weekly_trend() → haftalık trend teyidi (ffill ile merge)
+  4. _get_usdtry_features() → USD/TRY korelasyon verisi
+  5. _detect_market_regime() → BULL/BEAR/SIDEWAYS (SMA 50/200 cross)
+  6. TimeSeriesSplit(n_splits=3) cross-validation → R² skorları
+  7. Model eğitimi (tüm data) + ağırlıklı ensemble tahmin
+  8. Feature importance analizi (kümülatif %90)
+  9. Walk-forward yönsel doğruluk + Kelly Criterion verileri
+  10. ATR bazlı stop-loss / take-profit seviyeleri
+  11. Güven skoru: 0.4 * R² + 0.6 * yönsel doğruluk
+  12. Sinyal: BUY/SELL/HOLD (RSI extreme override)
+  13. Sonuç dict (current_price, prediction, signal, confidence, drill_down...)
+
+PERFORMANS NOTLARI:
+  - Toplam ~3-8 saniye/sembol (yfinance indirme ~2-5s, eğitim ~1-2s)
+  - _N_JOBS = os.cpu_count() — tüm çekirdekleri kullanır
+  - CV n_jobs=1 çünkü model zaten N_JOBS ile parallel çalışır
+  - _yfinance_lock → eşzamanlı indirme çakışmasını önler
+
+DEĞİŞİKLİK GEÇMİŞİ:
+  - v8.03: Oluşturuldu (tek model RandomForest)
+  - v8.04: Multi-model ensemble (LightGBM + XGBoost eklendi)
+  - v8.05: Kelly Criterion + walk-forward validation
+  - v8.06: Multi-timeframe + sentiment proxy + market rejim
+  - v8.09.01: Bu docstring eklendi (tüm proje dokümantasyonu sprint'i)
+"""
 
 import yfinance as yf
 import pandas as pd

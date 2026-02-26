@@ -1,3 +1,33 @@
+"""
+DigiBist — FastAPI Ana Uygulama (main.py)
+════════════════════════════════════════════
+
+BIST100 AI Trading Platform'un tek giriş noktası (entrypoint).
+FastAPI + uvicorn ile çalışır (4 worker, port 8000).
+
+ANA BÖLÜMLER (satır aralıkları yaklaşık):
+  L1-120     : Import'lar + CORS + Cache konfigürasyonu
+  L120-250   : WebSocket gerçek zamanlı piyasa akışı
+  L250-500   : AI Tahmin (forecast) endpoint'leri + cache
+  L500-700   : Auth (JWT login/register/me/users) endpoint'leri
+  L700-900   : Trading endpoint'leri (orders, auto-trade, conditional)
+  L900-1100  : Hisse yönetimi + Portfolio endpoint'leri
+  L1100-1300 : Chart verisi + KAP haberleri + bildirim endpoint'leri
+  L1300-1460 : Tahmin Doğruluk Analizi endpoint'leri (v8.09)
+  L1460+     : Startup event
+
+PRODUCTION:
+  Sunucu: 192.168.0.28 (Ubuntu 24.04)
+  Yönetim: systemctl restart digibist-backend
+  Workers: 4 (uvicorn, per systemd unit)
+
+DEPENDENCIES:
+  Core: FastAPI, uvicorn, SQLAlchemy (async), asyncpg
+  ML: scikit-learn, LightGBM, XGBoost, yfinance, pandas
+  Auth: python-jose (JWT), passlib (bcrypt)
+  WS: WebSocket (native FastAPI)
+  Price: TradingView Scanner API, Yahoo Spark API
+"""
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

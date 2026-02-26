@@ -1,3 +1,36 @@
+/**
+ * DigiBist — Üst Navigasyon Çubuğu (Navbar.js)
+ * ═══════════════════════════════════════════════
+ *
+ * Sabit üst bar: Logo + Sayfa tab'ları + Arama + BIST100 endeks + Bildirimler + Login
+ *
+ * RESPONSIVE:
+ *   Desktop: Yatay tab bar + inline arama + XU100 pill badge
+ *   Mobil:   Hamburger menü → slide-down panel + arama + XU100 kart
+ *
+ * TABS (izin bazlı filtrelenir):
+ *   Dashboard, Portföy, AI Tahminleri, ML Modelleri, Ayarlar, İşlem, Kullanıcılar
+ *   Her tab'ın perm alanı useAuth().hasPermission() ile kontrol edilir.
+ *
+ * ÖZELLİKLER:
+ *   - BIST AI logosu tıklanabilir → dashboard'a döner
+ *   - WS bağlantı durumu (yeşil/kırmızı dot + provider badge)
+ *   - XU100 endeks değeri (livePrices'dan)
+ *   - NotificationBell bileşeni (fırsat bildirimleri)
+ *   - Login/Logout dropdown (JWT auth)
+ *   - APP_VERSION gösterimi
+ *
+ * PROPS:
+ *   activePage       : Aktif sayfa id'si
+ *   setActivePage    : Sayfa değiştirme callback
+ *   searchQuery      : Hisse arama metni (DashboardPage'e yansır)
+ *   setSearchQuery   : Arama güncelleme callback
+ *   wsConnected      : WebSocket bağlantı durumu (boolean)
+ *   priceProvider    : Fiyat kaynağı ('TradingView'|'Yahoo'|'none')
+ *   livePrices       : Canlı fiyat objesi { THYAO: {...}, XU100: {...}, ... }
+ *   notifications    : useNotifications hook dönen obje
+ *   onSymbolClick    : Sidebar'dan sembol tıklanınca tetiklenen callback
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { APP_VERSION } from '../config';
 import {

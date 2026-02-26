@@ -1,16 +1,14 @@
-# Active Context — 26 Şubat 2026
+# Active Context — 27 Şubat 2026
 
 ## Current Goals
 
-- ## Son Durum — v8.09.00 AI Tahmin Geçmişi & Doğruluk Analizi (TAMAMLANDI)
-- ### Yapılan İşler
-- - AI tahmin geçmişi sayfası eklendi (PredictionHistoryPage.js — 736 satır)
-- - Backend: 7 verification kolonu + 6 CRUD fonksiyonu + 5 API endpoint
-- - Frontend: 3 sekmeli sayfa (Genel Bakış, Tahmin Geçmişi, Sıralama)
-- - Auth token bug fix: localStorage.getItem('token') → useAuth().authFetch
-- - yfinance → TradingView migration: verify_predictions() TradingView Scanner API kullanıyor
-- - HOLD sinyal bug fix: AI Sinyal ve Risk Sonuç ayrı kolonlarda gösteriliyor
-- - Tüm değişiklikler production'a deploy edildi ve test edildi
+- ## Son Durum — v8.09.01 Tüm Proje Dokümantasyonu Sprint'i (TAMAMLANIYOR)
+- ### Tamamlanan
+- - 18 dosyaya detaylı JSDoc/docstring eklendi (backend 5 + frontend 10 + memory bank 2 + config 1)
+- - Module docstring + section header + inline yorum — 3 katmanlı dokümantasyon
+- - config.js versiyon v8.07 → v8.09.01 bump yapıldı
+- ### Yedek Bekliyor
+- - Git commit + GitHub push + lokal zip yedek alınacak
 - ### Deployment Bilgileri
 - - Server: Ubuntu 24.04, 192.168.0.28, SSH root erişimi
 - - Backend: /opt/digibist/backend/ — `systemctl restart digibist-backend` ile yönetilir

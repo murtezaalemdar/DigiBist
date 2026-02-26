@@ -1,3 +1,24 @@
+/**
+ * PortfolioPage.js — Portföy Yönetimi Sayfası
+ * ═══════════════════════════════════════════════
+ *
+ * Kullanıcının favori hisselerini ve tüm BIST100 listesini
+ * canlı fiyat verileriyle birlikte gösterir.
+ *
+ * Bölümler:
+ *   - Favori Hisselerim : Yıldızlanan sembollerin fiyat kartları
+ *   - Tüm Hisseler Tablosu: Sembol, ad, sektör, fiyat, değişim %
+ *     → satıra tıklayınca Dashboard'a yönlendirir
+ *     → yıldız ikonu ile favori toggle
+ *
+ * Props:
+ *   stocks, livePrices, favorites, toggleFavorite,
+ *   setSelectedSymbol, setActivePage
+ *
+ * @module PortfolioPage
+ * @version 8.09.01
+ */
+
 import React from 'react';
 import {
   Briefcase,

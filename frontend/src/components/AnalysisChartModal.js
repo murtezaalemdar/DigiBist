@@ -1,3 +1,28 @@
+/**
+ * AnalysisChartModal.js — Teknik Analiz Grafik Modalı
+ * ════════════════════════════════════════════════════════
+ *
+ * Dashboard'dan açılan interaktif grafik modalı. Recharts kütüphanesi
+ * ile fiyat, hacim ve teknik indişatörleri görselleştirir.
+ *
+ * Grafik Türleri:
+ *   - AreaChart   : Fiyat + Bollinger bantları + SMA overlay
+ *   - BarChart    : Hacim (yeşil/kırmızı mum rengi)
+ *   - ComposedChart: RSI + MACD + Stochastic + ATR
+ *
+ * Zaman Aralıkları: 1DK, 5DK, 15DK, 30DK, 1S, 4S, 1G, 1H, 1A, 3A, 6A, 1Y, 5Y
+ * Gösterge Seçimi: Fiyat, Hacim, RSI, MACD, Bollinger, Stochastic, ATR
+ *
+ * API: GET /api/ai-chart-data/{symbol}?period={}&interval={}
+ * Bağımlılıklar: recharts (LineChart, AreaChart, BarChart, ComposedChart)
+ *
+ * Props: isOpen, onClose, symbol (string)
+ *
+ * @module AnalysisChartModal
+ * @version 8.09.01
+ * @since 8.02
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, Cell,

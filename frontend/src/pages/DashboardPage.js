@@ -1,3 +1,33 @@
+/**
+ * DashboardPage.js — Ana Analiz Panosu
+ * ═══════════════════════════════════════════════════════════
+ *
+ * Seçili hisse senedi için kapsamlı AI tahmin analizi gösterir.
+ *
+ * Bölümler:
+ *   - Başlık Kartı     : Hisse adı, canlı fiyat, sinyal rozeti (AL/SAT/TUT)
+ *   - Canlı Fiyat Kartı: WebSocket'ten gelen anlık fiyat, provider bilgisi,
+ *                        geri sayım, bağlantı durumu (TradingView/Yahoo/yfinance)
+ *   - AI Tahmin Kartı  : Yön tahmini (yukarı/aşağı), olasılık %, hedef fiyat,
+ *                        güven skoru, risk seviyesi, drill-down detaylar
+ *   - Teknik Göstergeler: RSI, MACD, Bollinger, SMA, hacim — FeaturePopup ile
+ *                        her göstergenin açıklamasını gösterir
+ *   - Grafik Butonu    : AnalysisChartModal açar (Recharts — mum, çizgi, bar)
+ *   - KAP Haberleri    : Google News RSS proxy üzerinden son haberler
+ *
+ * Props:
+ *   selectedSymbol, stocks, data, loading, isRefreshing, handleRefresh,
+ *   displayPrice, wsConnected, livePrice, priceProvider, lastPriceUpdate,
+ *   updateInterval
+ *
+ * Alt Bileşenler: AnalysisChartModal, DrillDownModal, FeaturePopup
+ * API: /api/ai-forecast/{symbol}, /api/kap-news/{symbol}
+ *
+ * @module DashboardPage
+ * @version 8.09.01
+ * @since 8.00
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   BrainCircuit,

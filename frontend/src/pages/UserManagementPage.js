@@ -1,3 +1,35 @@
+/**
+ * UserManagementPage.js — Kullanıcı Yönetimi (Admin Panel)
+ * ══════════════════════════════════════════════════════════════
+ *
+ * Sadece admin rolüne sahip kullanıcılar erişebilir.
+ * Kullanıcı CRUD işlemleri, rol atama ve izin yönetimi.
+ *
+ * Bileşenler:
+ *   - Toast             : Geçici bildirim (başarı/hata)
+ *   - Modal             : Kullanıcı ekleme/düzenleme formu
+ *   - Kullanıcı Tablosu  : Ad, rol rozeti, oluşturma tarihi, işlemler
+ *   - İzin Yönetimi     : Sayfa bazlı erişim toggle’ları
+ *   - Rol Atama         : Admin / Kullanıcı / İzleyici (3 seviye)
+ *   - Şifre Sıfırlama   : Admin tarafından kullanıcı şifresi değiştirme
+ *
+ * API:
+ *   GET    /api/users              — Kullanıcı listesi
+ *   POST   /api/users              — Yeni kullanıcı ekle
+ *   PUT    /api/users/:id          — Kullanıcı güncelle
+ *   DELETE /api/users/:id          — Kullanıcı sil
+ *   PUT    /api/users/:id/reset-pw — Şifre sıfırla
+ *   GET    /api/permissions        — İzin listesi
+ *   POST   /api/users/:id/permissions — İzin ata
+ *
+ * Roller: admin (kırmızı), user (mavi), viewer (gri)
+ * Auth: JWT Bearer token (useAuth hook)
+ *
+ * @module UserManagementPage
+ * @version 8.09.01
+ * @since 8.07
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, UserPlus, Pencil, Trash2, KeyRound, Save, X, Shield, Eye, UserCog,

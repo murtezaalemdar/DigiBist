@@ -1,6 +1,45 @@
 """
-BIST AI Trading — PostgreSQL Veritabanı Katmanı
-SQLAlchemy 2.0 async engine + ORM modelleri
+DigiBist — PostgreSQL Veritabanı Katmanı (database.py)
+═══════════════════════════════════════════════════════════════════════
+
+Tüm veritabanı işlemleri bu dosyada tanımlıdır.
+SQLAlchemy 2.0 async engine + ORM modelleri + raw SQL CRUD fonksiyonları.
+
+BAĞLANTI:
+  postgresql+asyncpg://bist_admin:bist_secure_2026@localhost:5432/bist_trading
+  Async engine: pool_size=10, max_overflow=20, pool_pre_ping=True
+  Sync engine: migration/startup yardımcısı (psycopg2)
+
+ORM MODELLERİ:
+  StockForecast    — AI tahmin sonuçları (stock_forecasts tablosu)
+  OrderRecord      — Emir kayıtları (orders tablosu)
+  AutoTradeLog     — Otomatik işlem logları
+  ConditionalOrder — Koşullu emirler (stop-loss, take-profit)
+
+ANA FONKSİYON GRUPLARI:
+  1. DB Health & Cache       : db_health_check, get_cached_forecast, set_cached_forecast
+  2. Forecast CRUD           : save_stock_forecast, get_stocks_for_trading
+  3. Hisse Yönetimi          : get_active_symbols, bulk_update_stock_prices
+  4. Trading                 : save_order_v2, get_recent_orders_v2, get_trade_stats
+  5. Conditional Orders      : save_conditional_order, get_conditional_orders, cancel_conditional_order
+  6. Auto-Trade Logs         : save_auto_trade_log, get_recent_auto_trade_logs
+  7. Tahmin Doğrulama (v8.09): migrate_prediction_verification, verify_predictions,
+                               get_prediction_history, get_prediction_accuracy_stats,
+                               get_prediction_accuracy_timeline, get_prediction_leaderboard
+
+TABLO YAPISAL:
+  stock_forecasts  — AI tahmin sonuçları + doğrulama kolonları (7 yeni: actual_price, vb.)
+  stocks           — Aktif hisse listesi
+  forecast_cache   — Geçici tahmin cache (TTL bazlı)
+  orders           — Paper/real emirler
+  conditional_orders — Stop-loss/take-profit koşullu emirler
+  auto_trade_logs  — Otomatik işlem log kayıtları
+
+DEĞİŞİKLİK GEÇMİŞİ:
+  v8.03: Oluşturuldu (temel CRUD)
+  v8.06: Trading v2 + conditional orders
+  v8.09: Prediction verification sistemi (7 kolon + 6 fonksiyon)
+  v8.09.01: Detaylı docstring'ler eklendi
 """
 
 import os
