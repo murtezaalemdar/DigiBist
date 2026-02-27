@@ -1380,7 +1380,7 @@ async def predictions_verify(
     Veri kaynağı: TradingView Scanner API (birincil) + Yahoo Spark (yedek).
     Not: Borsa saatleri dışında son kapanış fiyatı kullanılır.
     """
-    lookback = 72
+    lookback = 0  # Tüm bekleyen tahminleri doğrula (varsayılan)
     if payload and "lookback_hours" in payload:
         lookback = int(payload["lookback_hours"])
     result = await verify_predictions(lookback_hours=lookback)

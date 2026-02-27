@@ -935,27 +935,44 @@ async def get_prediction_history(
         return predictions, total
 
 
-async def verify_predictions(lookback_hours: int = 24) -> dict:
+async def verify_predictions(lookback_hours: int = 0) -> dict:
     """
     Doğrulanmamış tahminleri TradingView gerçek fiyatlarıyla karşılaştır.
     Birincil: TradingView Scanner API, Yedek: Yahoo Spark API.
-    lookback_hours: kaç saat öncesine kadar doğrulanacak.
+    lookback_hours: kaç saat öncesine kadar doğrulanacak (0 = tüm bekleyenler).
+    
+    NOT: Bugünkü tahminler (son 2 saat) hariç tutulur — borsa kapanışı beklenir.
     """
     from app.core.live_price_provider import fetch_tradingview_prices, fetch_yahoo_spark_prices
     from datetime import timedelta
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
     verified_count = 0
     errors = []
+    # Çok taze tahminleri hariç tut — en az 2 saat geçmiş olsun
+    freshness_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
 
     async with AsyncSessionLocal() as session:
-        result = await session.execute(text("""
-            SELECT id, symbol, current_price, predicted_price, signal, change_percent, forecasted_at
-            FROM stock_forecasts
-            WHERE verified = false AND forecasted_at >= :cutoff
-            ORDER BY forecasted_at DESC
-            LIMIT 200
-        """), {"cutoff": cutoff})
+        if lookback_hours > 0:
+            age_cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+            result = await session.execute(text("""
+                SELECT id, symbol, current_price, predicted_price, signal, change_percent, forecasted_at
+                FROM stock_forecasts
+                WHERE verified = false
+                  AND forecasted_at >= :age_cutoff
+                  AND forecasted_at <= :freshness_cutoff
+                ORDER BY forecasted_at DESC
+                LIMIT 500
+            """), {"age_cutoff": age_cutoff, "freshness_cutoff": freshness_cutoff})
+        else:
+            # Tüm bekleyenler (son 2 saatlik hariç)
+            result = await session.execute(text("""
+                SELECT id, symbol, current_price, predicted_price, signal, change_percent, forecasted_at
+                FROM stock_forecasts
+                WHERE verified = false
+                  AND forecasted_at <= :freshness_cutoff
+                ORDER BY forecasted_at DESC
+                LIMIT 500
+            """), {"freshness_cutoff": freshness_cutoff})
         rows = result.fetchall()
 
         if not rows:

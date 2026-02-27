@@ -163,6 +163,18 @@ class AnalysisScheduler:
             logger.info(f"Analiz döngüsü tamamlandı: {self._current_cycle_count}/{len(symbols)} hisse, {elapsed:.1f}s")
             self._add_log("SYSTEM", "DONE", f"{self._current_cycle_count} hisse analiz edildi ({elapsed:.1f}s)")
 
+            # ── Otomatik tahmin doğrulama ─────────────────────
+            # Her analiz döngüsünden sonra bekleyen tahminleri doğrula
+            try:
+                from app.core.database import verify_predictions
+                verify_result = await verify_predictions(lookback_hours=0)
+                v_count = verify_result.get("verified", 0)
+                if v_count > 0:
+                    logger.info(f"✅ Otomatik doğrulama: {v_count} tahmin doğrulandı")
+                    self._add_log("SYSTEM", "VERIFY", f"{v_count} tahmin otomatik doğrulandı")
+            except Exception as e:
+                logger.warning(f"Otomatik doğrulama hatası: {e}")
+
             # DB'ye çalışma bilgisi yaz
             interval_sec = max(self.config.get("interval_minutes", 60), 1) * 60
             next_run = datetime.now(TZ_ISTANBUL) + timedelta(seconds=interval_sec)
