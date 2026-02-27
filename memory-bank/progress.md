@@ -2,6 +2,34 @@
 
 ## Done
 
+- ✅ v8.10.01 — Haftalık Öz-Öğrenme Sistemi (27 Şubat 2026)
+  - Backend: `weekly_learner.py` (yeni, ~650 satır) — Otomatik haftalık analiz + self-tuning
+    - WeeklyLearner sınıfı: Doğrulanmış tahminleri analiz, indikatör performansı, confidence zone
+    - WeeklyLearnerScheduler: Cuma 18:05 TR zamanlanmış asyncio görev
+    - DB migration: ml_learning_history + ml_model_config tabloları
+    - Muhafazakâr parametre ayarlama (max %10/hafta, min 20 veri noktası)
+    - Pluggable mimari — gelecek indikatör/sistem entegrasyonuna açık
+  - Backend: `main.py` — 4 yeni API endpoint (/api/ml/learning-status, learning-history, model-config, weekly-learn)
+  - Backend: `main.py` — Startup'da ml_learning migration + zamanlayıcı auto-start
+  - Backend: `model.py` — Self-tuning parametreleri dokümantasyonu eklendi
+  - Backend: `risk_engine.py` — Haftalık öğrenme entegrasyonu notları eklendi
+  - **Test Sonuçları (1529 doğrulanmış tahmin):**
+    - Genel doğruluk: %23.68 (362/1529 yön doğru)
+    - XGBoost: %27.01 (en iyi), RandomForest: %19.46, LightGBM: %3.92 (kaldırılmış)
+    - En iyi indikatörler: ADX zayıf %39.08, RSI aşırı satım %37.5, Stochastic low %30.48
+    - Confidence yüksek bölgesi: %27.16 (0.55-0.60 aralığı)
+    - Risk filtresi: 504 sinyal engelledi, engellenenlerin doğruluğu sadece %15.3 — filtre çalışıyor ✅
+    - Otomatik ayar: Confidence eşiği 0.45 → 0.55 olarak güncellendi
+  - 4 API endpoint doğrulandı: learning-status ✅, model-config ✅, learning-history ✅, weekly-learn ✅
+  - asyncpg uyumu: date parametreleri Python date objesi, multi-statement migration ayrı transaction
+  - Memory Bank: progress.md, activeContext.md güncellemesi
+
+- ✅ v8.10.00 — ML Data-Driven Optimizasyon (27 Şubat 2026)
+  - analyze_predictions.py ile 467 doğrulanmış tahmin analizi
+  - model.py v2→v2.1: LightGBM kaldırıldı, feature 50→34, CV 3→5, ADX eklendi
+  - risk_engine.py v2→v2.1: Dinamik eşik 65-82% → 40-55%
+  - Deploy + test: THYAO=BUY ✅, AKBNK volatilite engeli ✅
+
 - ✅ v8.09.01 Sprint 3 — Kalan Dosyalar Dokümantasyonu & Memory Bank Kapsamlı Güncelleme (27 Şubat 2026)
   - Memory Bank: projectBrief.md — Docker→native, tech stack güncel (TradingView, systemd, Nginx)
   - Memory Bank: architect.md — Deployment diyagramı, 7 yeni karar (#9-#15)

@@ -1,6 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bell, BellRing, Check, CheckCheck, Trash2, X, ExternalLink, Volume2, VolumeX } from 'lucide-react';
 
+/* Sürekli sallanan zil animasyonu */
+const bellShakeStyle = `
+@keyframes bell-shake {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(14deg); }
+  20%  { transform: rotate(-12deg); }
+  30%  { transform: rotate(10deg); }
+  40%  { transform: rotate(-8deg); }
+  50%  { transform: rotate(6deg); }
+  60%  { transform: rotate(-4deg); }
+  70%  { transform: rotate(2deg); }
+  80%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+.bell-shake {
+  animation: bell-shake 1.2s ease-in-out infinite;
+  transform-origin: top center;
+}
+`;
+
 /**
  * Bildirim Zili Bileşeni
  * ──────────────────────
@@ -82,6 +102,7 @@ const NotificationBell = ({
 
   return (
     <div className="relative" ref={panelRef}>
+      <style>{bellShakeStyle}</style>
       {/* Zil Butonu */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -95,7 +116,7 @@ const NotificationBell = ({
         title={unreadCount > 0 ? `${unreadCount} okunmamış bildirim` : 'Bildirimler'}
       >
         {unreadCount > 0 ? (
-          <BellRing size={18} className="animate-[wiggle_0.5s_ease-in-out]" />
+          <BellRing size={18} className="bell-shake" />
         ) : (
           <Bell size={18} />
         )}

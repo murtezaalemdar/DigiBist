@@ -31,6 +31,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import useAutoRefresh from '../hooks/useAutoRefresh';
 import {
   Users, UserPlus, Pencil, Trash2, KeyRound, Save, X, Shield, Eye, UserCog,
   AlertTriangle, CheckCircle2, Loader2, ShieldCheck, ToggleLeft, ToggleRight,
@@ -146,6 +147,17 @@ const UserManagementPage = () => {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // ─── AUTO-REFRESH: Kullanıcı listesi (30s) ───
+  const refreshUsersSilent = useCallback(async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/users`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setUsers(data.users || []);
+    } catch (err) { /* sessiz hata */ }
+  }, [authFetch]);
+  useAutoRefresh(refreshUsersSilent, 30000, true);
 
   // ── İzin Listesini Yükle ──
   const fetchPermissions = useCallback(async () => {

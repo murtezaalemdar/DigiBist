@@ -28,7 +28,8 @@
  * @since 8.00
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import useAutoRefresh from '../hooks/useAutoRefresh';
 import {
   BrainCircuit,
   TrendingUp,
@@ -74,14 +75,22 @@ const DashboardPage = ({
   const activeSignal = data?.risk_signal || data?.signal;
 
   // KAP haberleri fetch
-  useEffect(() => {
+  const fetchKapNews = useCallback(() => {
     if (!selectedSymbol) return;
-    setKapLoading(true);
     fetch(`${API_BASE}/api/kap-news/${selectedSymbol}`)
       .then(r => r.json())
       .then(d => { setKapNews(d); setKapLoading(false); })
       .catch(() => setKapLoading(false));
   }, [selectedSymbol]);
+
+  useEffect(() => {
+    if (!selectedSymbol) return;
+    setKapLoading(true);
+    fetchKapNews();
+  }, [selectedSymbol, fetchKapNews]);
+
+  // AUTO-REFRESH: KAP haberleri (120s)
+  useAutoRefresh(fetchKapNews, 120000, !!selectedSymbol);
 
   // Geri sayım: gerçek güncelleme aralığına göre
   useEffect(() => {

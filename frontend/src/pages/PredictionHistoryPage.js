@@ -39,6 +39,7 @@
  *   - ScoreBadge — Renk kodlu skor göstergesi
  */
 import React, { useState, useEffect, useCallback } from 'react';
+import useAutoRefresh from '../hooks/useAutoRefresh';
 import {
   Target,
   TrendingUp,
@@ -58,6 +59,7 @@ import {
   Zap,
   Clock,
   Minus,
+  Calendar,
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import { useAuth } from '../hooks/useAuth';
@@ -211,6 +213,8 @@ const PredictionHistoryPage = () => {
   const [filterSymbol, setFilterSymbol] = useState('');
   const [filterSignal, setFilterSignal] = useState('');
   const [filterVerified, setFilterVerified] = useState(false);
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
 
   /** Her sayfada gösterilecek tahmin sayısı */
   const PAGE_SIZE = 20;
@@ -273,6 +277,8 @@ const PredictionHistoryPage = () => {
       if (filterSymbol) params.append('symbol', filterSymbol.toUpperCase());
       if (filterSignal) params.append('signal', filterSignal);
       if (filterVerified) params.append('verified_only', 'true');
+      if (filterDateFrom) params.append('date_from', filterDateFrom);
+      if (filterDateTo) params.append('date_to', filterDateTo);
 
       const res = await authFetch(`${API_BASE}/api/predictions/history?${params}`);
       if (res.ok) {
@@ -282,7 +288,7 @@ const PredictionHistoryPage = () => {
       }
     } catch (e) { console.error('Predictions fetch error:', e); }
     setLoading(false);
-  }, [authFetch, filterSymbol, filterSignal, filterVerified]);
+  }, [authFetch, filterSymbol, filterSignal, filterVerified, filterDateFrom, filterDateTo]);
 
   // ══════════════════════════════════════════════════════════════
   // DOĞRULAMA (Verification)
@@ -324,7 +330,36 @@ const PredictionHistoryPage = () => {
   /** Filtre veya sayfa değiştiğinde sadece tahmin listesi yenilenir */
   useEffect(() => {
     fetchPredictions(page);
-  }, [page, filterSymbol, filterSignal, filterVerified, fetchPredictions]);
+  }, [page, filterSymbol, filterSignal, filterVerified, filterDateFrom, filterDateTo, fetchPredictions]);
+
+  // ─── AUTO-REFRESH: Genel bakış verileri (60s) ───
+  const refreshOverview = useCallback(() => {
+    fetchAccuracy();
+    fetchTimeline();
+    fetchLeaderboard();
+  }, [fetchAccuracy, fetchTimeline, fetchLeaderboard]);
+  useAutoRefresh(refreshOverview, 60000, true);
+
+  // ─── AUTO-REFRESH: Tahmin listesi (60s) ───
+  const refreshPredictions = useCallback(() => {
+    fetchPredictions(page);
+  }, [fetchPredictions, page]);
+  useAutoRefresh(refreshPredictions, 60000, true);
+
+  /**
+   * Genel Bakış / Sıralama sekmesindeki öğeler tıklandığında
+   * "Tahmin Geçmişi" sekmesine uygun filtrelerle yönlendirir.
+   * @param {{ symbol?: string, signal?: string, verified?: boolean }} opts
+   */
+  const navigateToHistory = (opts = {}) => {
+    setFilterSymbol(opts.symbol || '');
+    setFilterSignal(opts.signal || '');
+    setFilterVerified(opts.verified || false);
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setPage(0);
+    setActiveTab('history');
+  };
 
   /** Toplam sayfa hesabı (sayfalama kontrolü için) */
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -422,12 +457,12 @@ const PredictionHistoryPage = () => {
           {accuracy && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
               {[
-                { label: 'Toplam Tahmin', value: accuracy.total_predictions, icon: Target, color: 'blue' },
-                { label: 'Doğrulanmış', value: accuracy.verified_count, icon: CheckCircle2, color: 'green' },
-                { label: 'Yön Doğruluğu', value: `%${accuracy.direction_accuracy}`, icon: TrendingUp, color: accuracy.direction_accuracy >= 60 ? 'green' : 'yellow' },
-                { label: 'Ort. Skor', value: accuracy.avg_score?.toFixed(1), icon: Zap, color: accuracy.avg_score >= 60 ? 'green' : 'yellow' },
-                { label: 'Ort. Hata', value: `%${accuracy.avg_price_error?.toFixed(2)}`, icon: AlertTriangle, color: accuracy.avg_price_error <= 3 ? 'green' : 'red' },
-                { label: 'Bekleyen', value: accuracy.unverified_count, icon: Clock, color: 'slate' },
+                { label: 'Toplam Tahmin', value: accuracy.total_predictions, icon: Target, color: 'blue', action: () => navigateToHistory() },
+                { label: 'Doğrulanmış', value: accuracy.verified_count, icon: CheckCircle2, color: 'green', action: () => navigateToHistory({ verified: true }) },
+                { label: 'Yön Doğruluğu', value: `%${accuracy.direction_accuracy}`, icon: TrendingUp, color: accuracy.direction_accuracy >= 60 ? 'green' : 'yellow', action: () => navigateToHistory({ verified: true }) },
+                { label: 'Ort. Skor', value: accuracy.avg_score?.toFixed(1), icon: Zap, color: accuracy.avg_score >= 60 ? 'green' : 'yellow', action: () => navigateToHistory({ verified: true }) },
+                { label: 'Ort. Hata', value: `%${accuracy.avg_price_error?.toFixed(2)}`, icon: AlertTriangle, color: accuracy.avg_price_error <= 3 ? 'green' : 'red', action: () => navigateToHistory({ verified: true }) },
+                { label: 'Bekleyen', value: accuracy.unverified_count, icon: Clock, color: 'slate', action: () => navigateToHistory() },
               ].map((card, i) => {
                 const Icon = card.icon;
                 const colorMap = {
@@ -439,12 +474,20 @@ const PredictionHistoryPage = () => {
                 };
                 const cm = colorMap[card.color] || colorMap.blue;
                 return (
-                  <div key={i} className={`bg-gradient-to-br ${cm} border rounded-2xl p-4 backdrop-blur-lg`}>
+                  <div
+                    key={i}
+                    onClick={card.action}
+                    className={`bg-gradient-to-br ${cm} border rounded-2xl p-4 backdrop-blur-lg cursor-pointer hover:scale-[1.03] hover:shadow-lg transition-all duration-200 group`}
+                    title="Tahmin Geçmişi'nde görüntüle"
+                  >
                     <div className="flex items-center gap-2 mb-2">
                       <Icon size={16} className="opacity-70" />
                       <span className="text-[10px] uppercase tracking-wider font-bold opacity-70">{card.label}</span>
                     </div>
-                    <div className="text-2xl font-extrabold">{card.value}</div>
+                    <div className="text-2xl font-extrabold flex items-center gap-2">
+                      {card.value}
+                      <ChevronRight size={14} className="opacity-0 group-hover:opacity-70 transition-opacity text-current" />
+                    </div>
                   </div>
                 );
               })}
@@ -454,8 +497,15 @@ const PredictionHistoryPage = () => {
           {/* Gauge'ler + Trend */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             {/* Yön Doğruluğu Gauge */}
-            <div className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-6 backdrop-blur-lg flex flex-col items-center justify-center">
-              <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Yön Doğruluğu</h3>
+            <div
+              onClick={() => navigateToHistory({ verified: true })}
+              className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-6 backdrop-blur-lg flex flex-col items-center justify-center cursor-pointer hover:bg-white/[0.05] hover:border-white/20 transition-all group"
+              title="Doğrulanmış tahminleri görüntüle"
+            >
+              <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                Yön Doğruluğu
+                <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-slate-400" />
+              </h3>
               {accuracy ? (
                 <AccuracyGauge
                   value={accuracy.direction_accuracy || 0}
@@ -479,7 +529,7 @@ const PredictionHistoryPage = () => {
             </div>
 
             {/* Sinyal Başarısı */}
-            <div className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-6 backdrop-blur-lg">
+            <div className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-6 backdrop-blur-lg hover:border-white/20 transition-all">
               <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Sinyal Bazlı Başarı</h3>
               {accuracy?.signal_breakdown && (
                 <div className="space-y-5">
@@ -488,9 +538,17 @@ const PredictionHistoryPage = () => {
                     if (!d) return null;
                     const acc = d.accuracy || 0;
                     return (
-                      <div key={sig}>
+                      <div
+                        key={sig}
+                        onClick={() => navigateToHistory({ signal: sig })}
+                        className="cursor-pointer hover:bg-white/[0.03] rounded-xl p-2 -mx-2 transition-all group"
+                        title={`${sig} sinyallerini Tahmin Geçmişi'nde görüntüle`}
+                      >
                         <div className="flex items-center justify-between mb-2">
-                          <SignalBadge signal={sig} />
+                          <div className="flex items-center gap-2">
+                            <SignalBadge signal={sig} />
+                            <ChevronRight size={12} className="opacity-0 group-hover:opacity-60 transition-opacity text-slate-400" />
+                          </div>
                           <span className="text-xs text-slate-500">{d.correct}/{d.total} doğru</span>
                         </div>
                         <div className="h-3 bg-white/5 rounded-full overflow-hidden">
@@ -506,8 +564,15 @@ const PredictionHistoryPage = () => {
                     );
                   })}
                   {accuracy.signal_breakdown.HOLD && (
-                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                      <SignalBadge signal="HOLD" />
+                    <div
+                      onClick={() => navigateToHistory({ signal: 'HOLD' })}
+                      className="flex items-center justify-between pt-2 border-t border-white/5 cursor-pointer hover:bg-white/[0.03] rounded-xl p-2 -mx-2 transition-all group"
+                      title="HOLD sinyallerini Tahmin Geçmişi'nde görüntüle"
+                    >
+                      <div className="flex items-center gap-2">
+                        <SignalBadge signal="HOLD" />
+                        <ChevronRight size={12} className="opacity-0 group-hover:opacity-60 transition-opacity text-slate-400" />
+                      </div>
                       <span className="text-xs text-slate-500">{accuracy.signal_breakdown.HOLD.total} tahmin</span>
                     </div>
                   )}
@@ -516,8 +581,15 @@ const PredictionHistoryPage = () => {
             </div>
 
             {/* Haftalık Trend */}
-            <div className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-6 backdrop-blur-lg">
-              <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Haftalık Doğruluk Trendi</h3>
+            <div
+              onClick={() => navigateToHistory({ verified: true })}
+              className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-6 backdrop-blur-lg cursor-pointer hover:bg-white/[0.05] hover:border-white/20 transition-all group"
+              title="Doğrulanmış tahminleri görüntüle"
+            >
+              <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider flex items-center gap-2">
+                Haftalık Doğruluk Trendi
+                <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-slate-400" />
+              </h3>
               <MiniBarChart data={timeline} height={100} />
               {timeline.length > 0 && (
                 <div className="flex justify-between mt-3 text-[10px] text-slate-600">
@@ -547,19 +619,35 @@ const PredictionHistoryPage = () => {
           {/* Ek İstatistikler */}
           {accuracy && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center">
+              <div
+                onClick={() => navigateToHistory({ verified: true })}
+                className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center cursor-pointer hover:bg-white/[0.06] hover:scale-[1.03] transition-all"
+                title="Doğrulanmış tahminleri görüntüle"
+              >
                 <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">En İyi Skor</div>
                 <div className="text-xl font-extrabold text-green-400">{accuracy.best_score}</div>
               </div>
-              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center">
+              <div
+                onClick={() => navigateToHistory({ verified: true })}
+                className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center cursor-pointer hover:bg-white/[0.06] hover:scale-[1.03] transition-all"
+                title="Doğrulanmış tahminleri görüntüle"
+              >
                 <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">En Kötü Skor</div>
                 <div className="text-xl font-extrabold text-red-400">{accuracy.worst_score}</div>
               </div>
-              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center">
+              <div
+                onClick={() => navigateToHistory()}
+                className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center cursor-pointer hover:bg-white/[0.06] hover:scale-[1.03] transition-all"
+                title="Tüm tahminleri görüntüle"
+              >
                 <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Ort. Güven</div>
                 <div className="text-xl font-extrabold text-blue-400">%{(accuracy.avg_confidence * 100).toFixed(1)}</div>
               </div>
-              <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center">
+              <div
+                onClick={() => navigateToHistory()}
+                className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 text-center cursor-pointer hover:bg-white/[0.06] hover:scale-[1.03] transition-all"
+                title="Tüm tahminleri görüntüle"
+              >
                 <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">BUY/SELL Oranı</div>
                 <div className="text-xl font-extrabold">
                   <span className="text-green-400">{accuracy.signal_breakdown?.BUY?.total || 0}</span>
@@ -587,39 +675,98 @@ const PredictionHistoryPage = () => {
        */}
       {activeTab === 'history' && (
         <div className="space-y-4">
-          {/* Filtre çubuğu — sembol arama + sinyal dropdown + doğrulanmış toggle */}
-          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Sembol ara (ör: THYAO)..."
-                value={filterSymbol}
-                onChange={e => { setFilterSymbol(e.target.value); setPage(0); }}
-                className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-purple-500/50 transition-colors"
-              />
+          {/* Filtre çubuğu — sembol arama + sinyal dropdown + doğrulanmış toggle + tarih aralığı */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-4 space-y-3">
+            {/* Üst satır: Sembol arama + sinyal + doğrulanmış */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Sembol ara (ör: THYAO)..."
+                  value={filterSymbol}
+                  onChange={e => { setFilterSymbol(e.target.value); setPage(0); }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-slate-600 focus:outline-none focus:border-purple-500/50 transition-colors"
+                />
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={filterSignal}
+                  onChange={e => { setFilterSignal(e.target.value); setPage(0); }}
+                  className="px-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer"
+                >
+                  <option value="">Tüm Sinyaller</option>
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                  <option value="HOLD">HOLD</option>
+                </select>
+                <button
+                  onClick={() => { setFilterVerified(!filterVerified); setPage(0); }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                    filterVerified
+                      ? 'bg-purple-500/20 border-purple-500/30 text-purple-400'
+                      : 'bg-black/30 border-white/10 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  <Filter size={14} /> Doğrulanmış
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <select
-                value={filterSignal}
-                onChange={e => { setFilterSignal(e.target.value); setPage(0); }}
-                className="px-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500/50 appearance-none cursor-pointer"
-              >
-                <option value="">Tüm Sinyaller</option>
-                <option value="BUY">BUY</option>
-                <option value="SELL">SELL</option>
-                <option value="HOLD">HOLD</option>
-              </select>
-              <button
-                onClick={() => { setFilterVerified(!filterVerified); setPage(0); }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all ${
-                  filterVerified
-                    ? 'bg-purple-500/20 border-purple-500/30 text-purple-400'
-                    : 'bg-black/30 border-white/10 text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                <Filter size={14} /> Doğrulanmış
-              </button>
+
+            {/* Alt satır: Tarih aralığı filtresi + hızlı tarih butonları */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <div className="flex items-center gap-2 flex-1">
+                <Calendar size={16} className="text-slate-500 shrink-0" />
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => { setFilterDateFrom(e.target.value); setPage(0); }}
+                  className="flex-1 px-3 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]"
+                  placeholder="Başlangıç"
+                />
+                <span className="text-slate-600 text-xs">—</span>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => { setFilterDateTo(e.target.value); setPage(0); }}
+                  className="flex-1 px-3 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500/50 transition-colors [color-scheme:dark]"
+                  placeholder="Bitiş"
+                />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { label: 'Bugün', days: 0 },
+                  { label: 'Son 7 Gün', days: 7 },
+                  { label: 'Son 30 Gün', days: 30 },
+                  { label: 'Son 90 Gün', days: 90 },
+                ].map(({ label, days }) => (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      const today = new Date().toISOString().slice(0, 10);
+                      if (days === 0) {
+                        setFilterDateFrom(today);
+                        setFilterDateTo(today);
+                      } else {
+                        const from = new Date();
+                        from.setDate(from.getDate() - days);
+                        setFilterDateFrom(from.toISOString().slice(0, 10));
+                        setFilterDateTo(today);
+                      }
+                      setPage(0);
+                    }}
+                    className="px-3 py-1.5 bg-black/30 border border-white/10 rounded-lg text-xs text-slate-400 hover:text-white hover:border-purple-500/30 transition-all"
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(0); }}
+                  className="px-3 py-1.5 bg-black/30 border border-white/10 rounded-lg text-xs text-slate-400 hover:text-red-400 hover:border-red-500/30 transition-all"
+                >
+                  Temizle
+                </button>
+              </div>
             </div>
           </div>
 
@@ -778,7 +925,12 @@ const PredictionHistoryPage = () => {
             </div>
             <div className="divide-y divide-white/5">
               {(leaderboard.best || []).map((item, i) => (
-                <div key={item.symbol} className="flex items-center px-6 py-3 hover:bg-white/[0.02] transition-colors">
+                <div
+                  key={item.symbol}
+                  onClick={() => navigateToHistory({ symbol: item.symbol })}
+                  className="flex items-center px-6 py-3 hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                  title={`${item.symbol} tahminlerini görüntüle`}
+                >
                   <div className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-extrabold mr-3 ${
                     i === 0 ? 'bg-yellow-500/20 text-yellow-400' :
                     i === 1 ? 'bg-slate-400/20 text-slate-300' :
@@ -788,7 +940,7 @@ const PredictionHistoryPage = () => {
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-sm">{item.symbol}</div>
+                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors">{item.symbol}</div>
                     <div className="text-[10px] text-slate-500">
                       {item.correct_count}/{item.verified_count} doğru · {item.total_predictions} tahmin
                     </div>
@@ -806,6 +958,7 @@ const PredictionHistoryPage = () => {
                       </div>
                       <div className="text-[10px] text-slate-600">skor</div>
                     </div>
+                    <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-slate-400" />
                   </div>
                 </div>
               ))}
@@ -828,12 +981,17 @@ const PredictionHistoryPage = () => {
             </div>
             <div className="divide-y divide-white/5">
               {(leaderboard.worst || []).map((item, i) => (
-                <div key={item.symbol} className="flex items-center px-6 py-3 hover:bg-white/[0.02] transition-colors">
+                <div
+                  key={item.symbol}
+                  onClick={() => navigateToHistory({ symbol: item.symbol })}
+                  className="flex items-center px-6 py-3 hover:bg-white/[0.04] transition-colors cursor-pointer group"
+                  title={`${item.symbol} tahminlerini görüntüle`}
+                >
                   <div className="w-7 h-7 flex items-center justify-center rounded-lg text-xs font-extrabold mr-3 bg-red-500/10 text-red-500">
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-sm">{item.symbol}</div>
+                    <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors">{item.symbol}</div>
                     <div className="text-[10px] text-slate-500">
                       {item.correct_count}/{item.verified_count} doğru · {item.total_predictions} tahmin
                     </div>
@@ -853,6 +1011,7 @@ const PredictionHistoryPage = () => {
                       <div className="text-sm font-bold text-orange-400">%{item.avg_error.toFixed(1)}</div>
                       <div className="text-[10px] text-slate-600">hata</div>
                     </div>
+                    <ChevronRight size={14} className="opacity-0 group-hover:opacity-60 transition-opacity text-slate-400" />
                   </div>
                 </div>
               ))}

@@ -27,6 +27,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import useAutoRefresh from '../hooks/useAutoRefresh';
+import {
   BrainCircuit,
   Settings,
   Activity,
@@ -49,6 +51,16 @@ import React, { useState, useEffect, useCallback } from 'react';
   Loader2,
   Eye,
   EyeOff,
+  Clock,
+  Play,
+  Square,
+  Timer,
+  BarChart3,
+  Bell,
+  BellOff,
+  Star,
+  List,
+  Users,
 } from 'lucide-react';
 import { API_BASE, ADMIN_API_BASE, WS_BASE } from '../config';
 import { useAuth } from '../hooks/useAuth';
@@ -88,6 +100,22 @@ const SettingsPage = ({
   const [showSecrets, setShowSecrets] = useState({});
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
+  /* ─── Analiz Zamanlayıcı state ─── */
+  const [scheduleConfig, setScheduleConfig] = useState({
+    enabled: false,
+    interval_minutes: 60,
+    stock_mode: 'all',
+    custom_symbols: '',
+    market_hours_only: true,
+    max_concurrent: 3,
+    notify_telegram: true,
+    notify_browser: true,
+  });
+  const [scheduleStatus, setScheduleStatus] = useState({});
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleRunning, setScheduleRunning] = useState(false);
+
   /* ─── Broker listesini çek ─── */
   const fetchBrokers = useCallback(async () => {
     try {
@@ -113,7 +141,65 @@ const SettingsPage = ({
   useEffect(() => {
     fetchBrokers();
     fetchStatus();
+    fetchScheduleConfig();
   }, [fetchBrokers, fetchStatus]);
+
+  // ─── AUTO-REFRESH: Broker durumu + zamanlayıcı (30s) ───
+  const refreshSettingsData = useCallback(() => {
+    fetchStatus();
+    fetchScheduleConfig();
+  }, [fetchStatus]);
+  useAutoRefresh(refreshSettingsData, 30000, true);
+
+  /* ─── Analiz Zamanlayıcı fonksiyonları ─── */
+  const fetchScheduleConfig = async () => {
+    setScheduleLoading(true);
+    try {
+      const res = await authFetch(`${API_BASE}/api/analysis-schedule`);
+      const data = await res.json();
+      const { scheduler_status, ...config } = data;
+      setScheduleConfig(prev => ({ ...prev, ...config }));
+      if (scheduler_status) setScheduleStatus(scheduler_status);
+    } catch (e) { console.error('Schedule fetch error:', e); }
+    finally { setScheduleLoading(false); }
+  };
+
+  const saveScheduleConfig = async (overrides = {}) => {
+    setScheduleSaving(true);
+    try {
+      const payload = { ...scheduleConfig, ...overrides };
+      const res = await authFetch(`${API_BASE}/api/analysis-schedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      const { scheduler_status, ...config } = data;
+      setScheduleConfig(prev => ({ ...prev, ...config }));
+      if (scheduler_status) setScheduleStatus(scheduler_status);
+      setStatusMsg({ type: 'success', text: 'Zamanlayıcı ayarları kaydedildi.' });
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: 'Zamanlayıcı kayıt hatası: ' + e.message });
+    } finally {
+      setScheduleSaving(false);
+      setTimeout(() => setStatusMsg({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const runScheduleNow = async () => {
+    setScheduleRunning(true);
+    try {
+      const res = await authFetch(`${API_BASE}/api/analysis-schedule/run-now`, { method: 'POST' });
+      const data = await res.json();
+      if (data.scheduler_status) setScheduleStatus(data.scheduler_status);
+      setStatusMsg({ type: 'success', text: 'Analiz döngüsü tamamlandı!' });
+    } catch (e) {
+      setStatusMsg({ type: 'error', text: 'Analiz çalıştırma hatası: ' + e.message });
+    } finally {
+      setScheduleRunning(false);
+      setTimeout(() => setStatusMsg({ type: '', text: '' }), 3000);
+    }
+  };
 
   /* ─── Broker config alanlarını çek ─── */
   const fetchBrokerConfig = async (brokerType) => {
@@ -460,6 +546,289 @@ const SettingsPage = ({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ═══ OTOMATİK ANALİZ ZAMANLAYICI ═══ */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 backdrop-blur-lg">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Timer className="text-purple-400" size={20} /> Otomatik Analiz Zamanlayıcı
+          </h3>
+          <div className="flex items-center gap-3">
+            {/* Durum göstergesi */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
+              scheduleConfig.enabled
+                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${scheduleConfig.enabled ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`} />
+              {scheduleConfig.enabled ? 'AKTİF' : 'DEVRE DIŞI'}
+            </div>
+            {/* Aç/Kapa toggle */}
+            <button
+              onClick={() => saveScheduleConfig({ enabled: !scheduleConfig.enabled })}
+              disabled={scheduleSaving}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${
+                scheduleConfig.enabled
+                  ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+                  : 'bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30'
+              }`}
+            >
+              {scheduleSaving ? <Loader2 size={14} className="animate-spin" /> :
+                scheduleConfig.enabled ? <><Square size={14} /> Durdur</> : <><Play size={14} /> Başlat</>
+              }
+            </button>
+          </div>
+        </div>
+
+        {/* Ayar kartları grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+          {/* Analiz Aralığı */}
+          <div className="p-4 bg-black/20 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="text-blue-400" size={16} />
+              <span className="text-sm font-bold text-slate-300">Analiz Aralığı</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                { label: '5 dk', value: 5 },
+                { label: '15 dk', value: 15 },
+                { label: '30 dk', value: 30 },
+                { label: '1 saat', value: 60 },
+                { label: '2 saat', value: 120 },
+                { label: '4 saat', value: 240 },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setScheduleConfig(prev => ({ ...prev, interval_minutes: opt.value }))}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                    scheduleConfig.interval_minutes === opt.value
+                      ? 'bg-blue-500/30 text-blue-400 border border-blue-500/40'
+                      : 'bg-white/5 text-slate-400 border border-white/10 hover:border-blue-500/30'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="1440"
+                value={scheduleConfig.interval_minutes}
+                onChange={(e) => setScheduleConfig(prev => ({ ...prev, interval_minutes: Math.max(1, parseInt(e.target.value) || 60) }))}
+                className="w-20 px-2 py-1.5 rounded-lg bg-black/30 border border-white/10 text-white text-sm text-center"
+              />
+              <span className="text-xs text-slate-500">dakika</span>
+            </div>
+          </div>
+
+          {/* Hisse Seçimi */}
+          <div className="p-4 bg-black/20 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="text-emerald-400" size={16} />
+              <span className="text-sm font-bold text-slate-300">Analiz Edilecek Hisseler</span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                { label: 'Tüm Hisseler', value: 'all', icon: <List size={12} /> },
+                { label: 'Favoriler', value: 'favorites', icon: <Star size={12} /> },
+                { label: 'Özel Liste', value: 'custom', icon: <Users size={12} /> },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setScheduleConfig(prev => ({ ...prev, stock_mode: opt.value }))}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                    scheduleConfig.stock_mode === opt.value
+                      ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-white/5 text-slate-400 border border-white/10 hover:border-emerald-500/30'
+                  }`}
+                >
+                  {opt.icon} {opt.label}
+                </button>
+              ))}
+            </div>
+            {scheduleConfig.stock_mode === 'custom' && (
+              <input
+                type="text"
+                value={scheduleConfig.custom_symbols}
+                onChange={(e) => setScheduleConfig(prev => ({ ...prev, custom_symbols: e.target.value.toUpperCase() }))}
+                placeholder="THYAO, AKBNK, GARAN, SAHOL..."
+                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white text-sm placeholder-slate-600"
+              />
+            )}
+            {scheduleConfig.stock_mode === 'all' && (
+              <div className="text-xs text-slate-500">📊 Aktif tüm hisseler analiz edilecek ({stocks.length} hisse)</div>
+            )}
+            {scheduleConfig.stock_mode === 'favorites' && (
+              <div className="text-xs text-slate-500">⭐ Favori listenizdeki hisseler analiz edilecek ({favorites.length} hisse)</div>
+            )}
+          </div>
+
+          {/* Borsa Saatleri & Eşzamanlılık */}
+          <div className="p-4 bg-black/20 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="text-amber-400" size={16} />
+              <span className="text-sm font-bold text-slate-300">Çalışma Koşulları</span>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-sm text-slate-400 group-hover:text-slate-300">Sadece borsa saatlerinde çalış</span>
+                <div
+                  onClick={() => setScheduleConfig(prev => ({ ...prev, market_hours_only: !prev.market_hours_only }))}
+                  className={`w-11 h-6 rounded-full transition-colors cursor-pointer flex items-center ${
+                    scheduleConfig.market_hours_only ? 'bg-amber-500/50' : 'bg-slate-600/50'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    scheduleConfig.market_hours_only ? 'translate-x-5' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </label>
+              {scheduleConfig.market_hours_only && (
+                <div className="text-xs text-amber-400/70 pl-1">🕐 09:30 — 18:00 (Borsa İstanbul)</div>
+              )}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-slate-400">Eşzamanlı analiz limiti</span>
+                  <span className="text-sm font-bold text-purple-400">{scheduleConfig.max_concurrent}</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={scheduleConfig.max_concurrent}
+                  onChange={(e) => setScheduleConfig(prev => ({ ...prev, max_concurrent: parseInt(e.target.value) }))}
+                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                />
+                <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+                  <span>1 (yavaş)</span>
+                  <span>5</span>
+                  <span>10 (hızlı)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bildirimler */}
+          <div className="p-4 bg-black/20 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Bell className="text-cyan-400" size={16} />
+              <span className="text-sm font-bold text-slate-300">Bildirimler</span>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-sm text-slate-400 group-hover:text-slate-300">📱 Telegram Bildirimi</span>
+                <div
+                  onClick={() => setScheduleConfig(prev => ({ ...prev, notify_telegram: !prev.notify_telegram }))}
+                  className={`w-11 h-6 rounded-full transition-colors cursor-pointer flex items-center ${
+                    scheduleConfig.notify_telegram ? 'bg-cyan-500/50' : 'bg-slate-600/50'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    scheduleConfig.notify_telegram ? 'translate-x-5' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </label>
+              <label className="flex items-center justify-between cursor-pointer group">
+                <span className="text-sm text-slate-400 group-hover:text-slate-300">🔔 Tarayıcı Bildirimi</span>
+                <div
+                  onClick={() => setScheduleConfig(prev => ({ ...prev, notify_browser: !prev.notify_browser }))}
+                  className={`w-11 h-6 rounded-full transition-colors cursor-pointer flex items-center ${
+                    scheduleConfig.notify_browser ? 'bg-cyan-500/50' : 'bg-slate-600/50'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    scheduleConfig.notify_browser ? 'translate-x-5' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Durum bilgisi + aksiyonlar */}
+        <div className="p-4 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-2xl border border-purple-500/20">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div className="text-center">
+              <div className="text-xs text-slate-500 mb-1">Son Çalışma</div>
+              <div className="text-sm font-bold text-purple-400">
+                {scheduleConfig.last_run_at
+                  ? new Date(scheduleConfig.last_run_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                  : '—'}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-slate-500 mb-1">Sonraki Çalışma</div>
+              <div className="text-sm font-bold text-blue-400">
+                {scheduleStatus.next_run_at
+                  ? new Date(scheduleStatus.next_run_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                  : '—'}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-slate-500 mb-1">Toplam Çalışma</div>
+              <div className="text-sm font-bold text-emerald-400">{scheduleConfig.total_runs || 0}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-slate-500 mb-1">Analiz Edilen</div>
+              <div className="text-sm font-bold text-amber-400">{scheduleStatus.analyzed_count || 0} hisse</div>
+            </div>
+          </div>
+
+          {/* Son loglar */}
+          {scheduleStatus.recent_logs && scheduleStatus.recent_logs.length > 0 && (
+            <div className="mb-4 max-h-32 overflow-y-auto">
+              <div className="text-xs text-slate-500 mb-2">Son İşlemler:</div>
+              <div className="space-y-1">
+                {scheduleStatus.recent_logs.slice(-5).reverse().map((log, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    <span className={`font-bold ${
+                      log.action === 'ERROR' ? 'text-red-400' :
+                      log.action === 'SKIP' ? 'text-slate-500' :
+                      log.action === 'DONE' ? 'text-green-400' :
+                      log.action === 'BUY' ? 'text-green-400' :
+                      log.action === 'SELL' ? 'text-red-400' :
+                      'text-blue-400'
+                    }`}>{log.symbol}</span>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-slate-400">{log.action}</span>
+                    <span className="text-slate-600">—</span>
+                    <span className="text-slate-500 truncate">{log.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => saveScheduleConfig()}
+              disabled={scheduleSaving}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 border border-purple-500/30 text-sm font-medium transition"
+            >
+              {scheduleSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Ayarları Kaydet
+            </button>
+            <button
+              onClick={runScheduleNow}
+              disabled={scheduleRunning}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-sm font-medium transition"
+            >
+              {scheduleRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+              Şimdi Çalıştır
+            </button>
+            <button
+              onClick={fetchScheduleConfig}
+              disabled={scheduleLoading}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-500/20 hover:bg-slate-500/30 text-slate-400 border border-slate-500/30 text-sm font-medium transition"
+            >
+              {scheduleLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            </button>
+          </div>
         </div>
       </div>
 

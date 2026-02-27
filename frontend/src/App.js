@@ -40,6 +40,7 @@ import { BrainCircuit, ShieldX } from 'lucide-react';
 import { API_BASE, APP_VERSION_FULL } from './config';
 import useWebSocket from './hooks/useWebSocket';
 import useNotifications from './hooks/useNotifications';
+import useAutoRefresh from './hooks/useAutoRefresh';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LiveTicker from './components/LiveTicker';
 import Navbar from './components/Navbar';
@@ -231,6 +232,28 @@ const AppContent = () => {
   useEffect(() => {
     if (activePage === 'settings' || activePage === 'trade') loadTradingState();
   }, [activePage, loadTradingState]);
+
+  // ─── AUTO-REFRESH: Hisse listesi (60s, her zaman) ───
+  const refreshStocks = useCallback(() => {
+    fetch(`${API_BASE}/api/stocks`)
+      .then(res => res.json())
+      .then(d => { if (Array.isArray(d) && d.length > 0) setStocks(d); })
+      .catch(() => {});
+  }, []);
+  useAutoRefresh(refreshStocks, 60000, true);
+
+  // ─── AUTO-REFRESH: AI Tahmin (30s, dashboard açıkken) ───
+  const refreshForecast = useCallback(() => {
+    if (!selectedSymbol) return;
+    fetch(`${API_BASE}/api/ai-forecast/${selectedSymbol}`)
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+      .then(d => { if (!d.error) setData(d); })
+      .catch(() => {});
+  }, [selectedSymbol]);
+  useAutoRefresh(refreshForecast, 30000, activePage === 'dashboard');
+
+  // ─── AUTO-REFRESH: Trading state (15s, trade/settings açıkken) ───
+  useAutoRefresh(loadTradingState, 15000, activePage === 'trade' || activePage === 'settings');
 
   const submitManualOrder = () => {
     if (!manualOrder.symbol || !manualOrder.quantity) return;

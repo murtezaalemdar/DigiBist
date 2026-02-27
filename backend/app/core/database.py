@@ -875,10 +875,16 @@ async def get_prediction_history(
         if verified_only:
             where_clauses.append("verified = true")
         if date_from:
-            where_clauses.append("forecasted_at >= :date_from")
+            # Türkiye saat dilimine çevirip date olarak karşılaştır
+            where_clauses.append(
+                "CAST((forecasted_at AT TIME ZONE 'Europe/Istanbul') AS date) >= CAST(:date_from AS date)"
+            )
             params["date_from"] = date_from
         if date_to:
-            where_clauses.append("forecasted_at <= :date_to")
+            # Günün sonuna kadar dahil et (23:59:59)
+            where_clauses.append(
+                "CAST((forecasted_at AT TIME ZONE 'Europe/Istanbul') AS date) <= CAST(:date_to AS date)"
+            )
             params["date_to"] = date_to
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1211,3 +1217,133 @@ async def get_prediction_leaderboard(limit: int = 20) -> dict:
             "best": [_row_to_dict(r) for r in best],
             "worst": [_row_to_dict(r) for r in worst],
         }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 8) ANALİZ ZAMANLAYICI (Analysis Scheduler) — v8.10
+# ═══════════════════════════════════════════════════════════════════════
+
+async def migrate_analysis_schedule():
+    """
+    analysis_schedule tablosunu oluşturur (yoksa).
+    Otomatik teknik analiz zamanlama ayarlarını saklar.
+    Multi-worker safe: concurrent CREATE TABLE hatalarını yakalar.
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS analysis_schedule (
+                    id              SERIAL PRIMARY KEY,
+                    enabled         BOOLEAN DEFAULT false,
+                    interval_minutes INTEGER DEFAULT 60,
+                    stock_mode      VARCHAR(20) DEFAULT 'all',
+                    custom_symbols  TEXT DEFAULT '',
+                    market_hours_only BOOLEAN DEFAULT true,
+                    max_concurrent  INTEGER DEFAULT 3,
+                    notify_telegram BOOLEAN DEFAULT true,
+                    notify_browser  BOOLEAN DEFAULT true,
+                    last_run_at     TIMESTAMP WITH TIME ZONE,
+                    next_run_at     TIMESTAMP WITH TIME ZONE,
+                    total_runs      INTEGER DEFAULT 0,
+                    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """))
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            # Başka bir worker zaten oluşturmuş olabilir — devam et
+
+        # Eğer tablo boşsa varsayılan kayıt ekle
+        try:
+            result = await session.execute(text("SELECT COUNT(*) FROM analysis_schedule"))
+            count = result.scalar()
+            if count == 0:
+                await session.execute(text("""
+                    INSERT INTO analysis_schedule
+                        (enabled, interval_minutes, stock_mode, custom_symbols,
+                         market_hours_only, max_concurrent, notify_telegram, notify_browser, total_runs)
+                    VALUES
+                        (false, 60, 'all', '', true, 3, true, true, 0)
+                """))
+                await session.commit()
+        except Exception:
+            await session.rollback()
+            # Race condition — başka worker zaten INSERT yapmış olabilir
+
+        logger.info("analysis_schedule tablosu hazır.")
+
+
+async def get_analysis_schedule() -> dict:
+    """Mevcut analiz zamanlama ayarlarını getir."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(text(
+            "SELECT enabled, interval_minutes, stock_mode, custom_symbols, "
+            "market_hours_only, max_concurrent, notify_telegram, notify_browser, "
+            "last_run_at, next_run_at, total_runs, updated_at "
+            "FROM analysis_schedule ORDER BY id LIMIT 1"
+        ))
+        row = result.fetchone()
+        if not row:
+            return {
+                "enabled": False, "interval_minutes": 60, "stock_mode": "all",
+                "custom_symbols": "", "market_hours_only": True, "max_concurrent": 3,
+                "notify_telegram": True, "notify_browser": True,
+                "last_run_at": None, "next_run_at": None, "total_runs": 0,
+                "updated_at": None,
+            }
+        return {
+            "enabled": row[0],
+            "interval_minutes": row[1],
+            "stock_mode": row[2] or "all",
+            "custom_symbols": row[3] or "",
+            "market_hours_only": row[4],
+            "max_concurrent": row[5] or 3,
+            "notify_telegram": row[6],
+            "notify_browser": row[7],
+            "last_run_at": row[8].isoformat() if row[8] else None,
+            "next_run_at": row[9].isoformat() if row[9] else None,
+            "total_runs": row[10] or 0,
+            "updated_at": row[11].isoformat() if row[11] else None,
+        }
+
+
+async def save_analysis_schedule(config: dict) -> dict:
+    """Analiz zamanlama ayarlarını güncelle."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("""
+            UPDATE analysis_schedule SET
+                enabled = :enabled,
+                interval_minutes = :interval_minutes,
+                stock_mode = :stock_mode,
+                custom_symbols = :custom_symbols,
+                market_hours_only = :market_hours_only,
+                max_concurrent = :max_concurrent,
+                notify_telegram = :notify_telegram,
+                notify_browser = :notify_browser,
+                updated_at = NOW()
+            WHERE id = (SELECT id FROM analysis_schedule ORDER BY id LIMIT 1)
+        """), {
+            "enabled": config.get("enabled", False),
+            "interval_minutes": config.get("interval_minutes", 60),
+            "stock_mode": config.get("stock_mode", "all"),
+            "custom_symbols": config.get("custom_symbols", ""),
+            "market_hours_only": config.get("market_hours_only", True),
+            "max_concurrent": config.get("max_concurrent", 3),
+            "notify_telegram": config.get("notify_telegram", True),
+            "notify_browser": config.get("notify_browser", True),
+        })
+        await session.commit()
+    return await get_analysis_schedule()
+
+
+async def update_schedule_run_info(last_run_at: datetime, next_run_at: datetime):
+    """Zamanlayıcı çalışma bilgisini güncelle."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("""
+            UPDATE analysis_schedule SET
+                last_run_at = :last_run,
+                next_run_at = :next_run,
+                total_runs = total_runs + 1
+            WHERE id = (SELECT id FROM analysis_schedule ORDER BY id LIMIT 1)
+        """), {"last_run": last_run_at, "next_run": next_run_at})
+        await session.commit()

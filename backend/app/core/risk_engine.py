@@ -38,6 +38,25 @@ Changelog
 ─────────
 - v8.09.01: Module docstring eklendi (Sprint 3)
 - v8.08.00: İlk Risk Engine v2 implementasyonu
+- v8.10.01: Haftalık Öz-Öğrenme notları eklendi
+
+🧠 HAFTALIK ÖZ-ÖĞRENME ENTEGRASYONU:
+  ════════════════════════════════════
+  weekly_learner.py risk engine parametrelerini analiz eder ve önerir.
+  
+  SELF-TUNING PARAMETRELERİ (ml_model_config tablosunda saklanır):
+    - risk_base_normal   (0.40) : Düşük volatilite → düşük eşik
+    - risk_base_mid      (0.45) : Orta volatilite
+    - risk_base_high     (0.50) : Yüksek volatilite
+    - risk_base_extreme  (0.55) : Çok yüksek volatilite
+  
+  Risk filtresi analizi: Hangi sinyaller doğru engellenmiş, hangileri
+  yanlış engellenmiş → buna göre eşikler kademeli ayarlanır.
+  
+  GELECEK PLANLAR:
+    - Regime-specific risk eşikleri (BULL/BEAR ayrı)
+    - Sembol bazlı risk profilleri (volatil hisseler farklı eşik)
+    - Kelly Criterion otomatik kalibrasyonu (gerçek W/L oranı ile)
 """
 import logging
 
@@ -74,27 +93,32 @@ class RiskEngine:
     @staticmethod
     def _dynamic_confidence_threshold(atr_pct: float = 0.0, market_regime: str = "SIDEWAYS") -> float:
         """
-        ATR volatilitesi ve market rejimine göre dinamik güven eşiği.
-        Yüksek volatilite → daha yüksek eşik.
-        Ayı piyasası → daha temkinli.
+        v2.1 — ATR volatilitesi ve market rejimine göre dinamik güven eşiği.
+        
+        v2 model güven formülü: 0.15*R² + 0.85*directional_accuracy
+        → %59+ yönsel doğruluk gerekli (confidence >= 0.50 model filtresi)
+        → RiskEngine eşikleri buna uyumlu düşürüldü ki
+           model filtresini geçen sinyaller burada da geçebilsin.
+        
+        v2.1 eşikleri: %43-58 (v1: %65-82, v2: %50-65)
         """
-        # ATR bazlı taban
-        if atr_pct > 4.0:
-            base = 0.82
+        # ATR bazlı taban (v2.1 — model filtresine uyumlu)
+        if atr_pct > 5.0:
+            base = 0.55  # Çok yüksek volatilite — hâlâ dikkatli
+        elif atr_pct > 4.0:
+            base = 0.50
         elif atr_pct > 3.0:
-            base = 0.78
-        elif atr_pct > 2.0:
-            base = 0.72
+            base = 0.45
         else:
-            base = 0.65
+            base = 0.40  # Normal volatilite — model filtresi yeterli
 
         # Market rejim bazlı ayar
         if market_regime in ("BEAR", "BEAR_WEAK"):
-            base += 0.05
+            base += 0.03
         elif market_regime == "BULL":
-            base -= 0.03
+            base -= 0.02
 
-        return round(min(0.90, max(0.60, base)), 2)
+        return round(min(0.65, max(0.38, base)), 2)
 
     # ═══════════════════════════════════════════
     #  2) Kelly Criterion Pozisyon Boyutlandırma

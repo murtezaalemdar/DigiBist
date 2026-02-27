@@ -88,6 +88,18 @@ from app.core.database import (
     get_prediction_accuracy_timeline,
     get_prediction_leaderboard,
 )
+from app.core.database import (
+    migrate_analysis_schedule,
+    get_analysis_schedule,
+    save_analysis_schedule,
+)
+from app.core.analysis_scheduler import AnalysisScheduler
+from app.ml_engine.weekly_learner import (
+    weekly_learner_scheduler,
+    migrate_ml_learning,
+    get_learning_history,
+    get_active_model_config,
+)
 from app.core.live_price_provider import fetch_live_prices, get_provider_stats
 import asyncio
 import time
@@ -147,6 +159,7 @@ async def get_watched_symbols() -> list[str]:
 
 execution_engine = ExecutionEngine()
 auto_trader = AutoTrader()
+analysis_scheduler = AnalysisScheduler()
 broker_manager = BrokerManager()
 
 # Broker manager'ı execution engine'e bağla
@@ -1402,15 +1415,126 @@ async def predictions_leaderboard(limit: int = 20, user: UserInfo = Depends(requ
 
 
 # ─────────────────────────────────────────────
-# 8) BROKER YÖNETİMİ API
+# 8.5) ANALİZ ZAMANLAYICI API (v8.10)
+# ─────────────────────────────────────────────
+
+@app.get("/api/analysis-schedule")
+async def analysis_schedule_get(user: UserInfo = Depends(require_auth)):
+    """Analiz zamanlama ayarlarını + zamanlayıcı durumunu getir."""
+    config = await get_analysis_schedule()
+    status = analysis_scheduler.status()
+    return {**config, "scheduler_status": status}
+
+
+@app.put("/api/analysis-schedule")
+async def analysis_schedule_update(payload: dict, user: UserInfo = Depends(require_auth)):
+    """Analiz zamanlama ayarlarını güncelle ve zamanlayıcıyı yeniden başlat."""
+    config = await save_analysis_schedule(payload)
+    if config.get("enabled"):
+        analysis_scheduler.start(config, get_forecast)
+        logger.info("Analiz Zamanlayıcı yeniden başlatıldı (ayar değişikliği).")
+    else:
+        analysis_scheduler.stop()
+        logger.info("Analiz Zamanlayıcı durduruldu (ayar değişikliği).")
+    status = analysis_scheduler.status()
+    return {**config, "scheduler_status": status}
+
+
+@app.post("/api/analysis-schedule/run-now")
+async def analysis_schedule_run_now(user: UserInfo = Depends(require_auth)):
+    """Anlık bir analiz döngüsü tetikle (zamanlayıcı durumu ne olursa olsun)."""
+    config = await get_analysis_schedule()
+    # Geçici olarak market_hours_only devre dışı bırak (kullanıcı istedi)
+    config["market_hours_only"] = False
+    if not analysis_scheduler.enabled:
+        # Tek seferlik çalıştır: geçici scheduler task
+        analysis_scheduler._forecast_runner = get_forecast
+        analysis_scheduler.config = config
+        await analysis_scheduler._run_cycle()
+    else:
+        # Zaten çalışıyor, ekstra döngü tetikle
+        old_config = analysis_scheduler.config.copy()
+        analysis_scheduler.config["market_hours_only"] = False
+        await analysis_scheduler._run_cycle()
+        analysis_scheduler.config = old_config
+    status = analysis_scheduler.status()
+    return {"status": "completed", "scheduler_status": status}
+
+
+# ─────────────────────────────────────────────
+# 8.6) HAFTALIK ÖZ-ÖĞRENME API (v8.10+)
+# ─────────────────────────────────────────────
+# 🧠 ML modeli her Cuma 18:05'te kendini analiz eder ve optimize eder.
+# Amaç: Sürekli yukarı ivmeli doğru tahmin süreci.
+# Yeni sistemlere/indikatörlere açık mimari.
+
+@app.get("/api/ml/learning-status")
+async def ml_learning_status(user: UserInfo = Depends(require_auth)):
+    """Haftalık öğrenme zamanlayıcısı + son öğrenme durumu."""
+    return weekly_learner_scheduler.status()
+
+
+@app.get("/api/ml/learning-history")
+async def ml_learning_history_api(limit: int = 12, user: UserInfo = Depends(require_auth)):
+    """Son N haftalık öğrenme geçmişi (varsayılan: 12 hafta)."""
+    return await get_learning_history(limit=limit)
+
+
+@app.get("/api/ml/model-config")
+async def ml_model_config_api(user: UserInfo = Depends(require_auth)):
+    """Aktif model konfigürasyonu (self-tuning parametreleri)."""
+    config = await get_active_model_config()
+    if not config:
+        return {"message": "Henüz model konfigürasyonu yok — ilk haftalık analizden sonra oluşturulacak"}
+    return config
+
+
+@app.post("/api/ml/weekly-learn")
+async def ml_weekly_learn_now(
+    payload: dict = None,
+    user: UserInfo = Depends(require_auth),
+):
+    """
+    Manuel haftalık öğrenme tetikleme.
+    Body (opsiyonel): { "week_start": "2026-02-20", "week_end": "2026-02-27" }
+    Boş body → son 7 gün analiz edilir.
+    """
+    week_start = payload.get("week_start") if payload else None
+    week_end = payload.get("week_end") if payload else None
+    result = await weekly_learner_scheduler.run_now(week_start, week_end)
+    return result
+
+
+# ─────────────────────────────────────────────
+# 9) BROKER YÖNETİMİ API
 # ─────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup_initialize_broker():
-    """Uygulama başlangıcında varsayılan broker'ı aktifle."""
+    """Uygulama başlangıcında varsayılan broker'ı aktifle ve zamanlayıcıyı başlat."""
     await migrate_prediction_verification()
+    await migrate_analysis_schedule()
+    await migrate_ml_learning()
     await broker_manager.initialize_default()
     logger.info("Broker Manager başlatıldı (Paper Trading varsayılan).")
+
+    # Analiz zamanlayıcıyı DB config'den başlat
+    try:
+        sched_config = await get_analysis_schedule()
+        if sched_config.get("enabled"):
+            analysis_scheduler.start(sched_config, get_forecast)
+            logger.info("Analiz Zamanlayıcı otomatik başlatıldı.")
+        else:
+            logger.info("Analiz Zamanlayıcı devre dışı (ayardan başlatılabilir).")
+    except Exception as e:
+        logger.warning(f"Analiz Zamanlayıcı başlatılamadı: {e}")
+
+    # Haftalık Öz-Öğrenme Zamanlayıcısı (Cuma 18:05 TR)
+    try:
+        weekly_learner_scheduler.start()
+        logger.info("🧠 Haftalık Öz-Öğrenme Zamanlayıcısı başlatıldı")
+    except Exception as e:
+        logger.warning(f"Haftalık Öğrenme Zamanlayıcısı başlatılamadı: {e}")
 
 
 # Cache pre-warming kaldırıldı — anlık veri odaklı platform, cache gereksiz
